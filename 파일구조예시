@@ -1,0 +1,20 @@
+crowd-density-project/
+│
+├── main.py # 실행 파일
+├── detector/
+│ ├── yolo_model.py # YOLO 로딩
+│
+├── tracking/
+│ ├── tracker.py # ByteTrack wrapper (선택)
+│
+├── analysis/
+│ ├── density.py # 밀집도 계산
+│ ├── risk.py # 위험도 판단
+│
+├── utils/
+│ ├── draw.py # 화면 표시
+│
+├── data/
+│ ├── sample.mp4
+│
+└── README.md
