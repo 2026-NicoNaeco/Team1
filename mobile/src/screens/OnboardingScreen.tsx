@@ -6,14 +6,17 @@ import type { DrivingFrequency, FactorCode, RoadTypePreference } from '../domain
 import { colors, layout, radius, space } from '../design/tokens';
 import { useAppStore, type OnboardingResult } from '../state/appStore';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Chip } from '../ui/Chip';
-import { Icon, type IconName } from '../ui/Icon';
+import type { IconName } from '../ui/Icon';
+import { RoadHero } from '../ui/Illustration';
 import { IconButton } from '../ui/IconButton';
-import { Notice } from '../ui/Notice';
+import { PressableScale } from '../ui/PressableScale';
 import { SelectCard } from '../ui/SelectCard';
 import { ActionBar, Screen } from '../ui/Screen';
-import { SwitchRow } from '../ui/Rows';
+import { Group, SwitchRow } from '../ui/Rows';
 import { Text } from '../ui/Text';
+import { haptics } from '../ui/haptics';
 
 type Step = 'welcome' | 'frequency' | 'burdens' | 'routePrefs' | 'finish';
 const STEPS: Step[] = ['welcome', 'frequency', 'burdens', 'routePrefs', 'finish'];
@@ -35,15 +38,9 @@ const ROAD_OPTIONS: Array<{ value: RoadTypePreference; title: string; descriptio
 
 const EXTRA_OPTIONS = [5, 10, 20];
 
-const BENEFITS: Array<{ icon: IconName; text: string }> = [
-  { icon: 'sliders', text: '어려운 운전 요소를 알려주시면, 그에 맞춰 경로를 비교해 드려요.' },
-  { icon: 'route', text: '왜 이 경로인지, 대신 무엇을 감수하는지 함께 보여드려요.' },
-  { icon: 'clock', text: '질문은 세 가지뿐이에요. 건너뛰어도, 나중에 바꿔도 괜찮아요.' },
-];
-
 /**
  * 첫 실행 온보딩: 환영 → 질문 3단계(운전 빈도, 부담스러운 요소, 경로 취향) → 마무리(기록·개인화 선택).
- * 한 단계에 한 주제만 다루고, 어디서든 건너뛸 수 있다. 건너뛰면 지금까지 고른 값 + 기본 설정으로 시작한다.
+ * 한 화면에 한 주제만 다루고, 어디서든 건너뛸 수 있다. 건너뛰면 지금까지 고른 값 + 기본 설정으로 시작한다.
  */
 export function OnboardingScreen() {
   const complete = useAppStore((s) => s.completeOnboarding);
@@ -81,6 +78,7 @@ export function OnboardingScreen() {
         ? { saveRecords: false, usePersonalization: false }
         : { saveRecords, usePersonalization: personalization },
     };
+    if (!options?.skipConsent) haptics.success();
     complete(result);
   };
 
@@ -105,6 +103,7 @@ export function OnboardingScreen() {
             testID="onboarding-skip"
             title="건너뛰기"
             variant="tertiary"
+            size="small"
             fullWidth={false}
             onPress={() => finish({ skipConsent: true })}
             accessibilityHint="지금까지 고른 값과 기본 설정으로 시작해요"
@@ -114,43 +113,31 @@ export function OnboardingScreen() {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, step === 'welcome' && styles.contentCentered]} keyboardShouldPersistTaps="handled">
         {step === 'welcome' ? (
           <>
-            <View style={styles.mark} aria-hidden>
-              <Icon name="navigation" size={30} color={colors.onPrimary} />
+            <RoadHero />
+            <View style={styles.titleBlock}>
+              <Text variant="title1" accessibilityRole="header">
+                조금 돌아가더라도,{'\n'}나에게 운전 부담이 적은 길로.
+              </Text>
+              <Text variant="body" color={colors.textSecondary}>
+                어려운 운전 요소를 알려 주시면, 그에 맞춰 경로를 비교해 드려요. 왜 이 길인지, 대신 무엇을 감수하는지도 함께 보여 드릴게요.
+              </Text>
             </View>
-            <Text variant="title1" accessibilityRole="header">
-              조금 돌아가더라도,{'\n'}나에게 운전 부담이 적은 길로.
-            </Text>
-            <View style={styles.benefits}>
-              {BENEFITS.map((b) => (
-                <View key={b.text} style={styles.benefit}>
-                  <View style={styles.benefitIcon}>
-                    <Icon name={b.icon} size={20} color={colors.primary} />
-                  </View>
-                  <Text variant="body" style={styles.flex}>
-                    {b.text}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Notice
-              tone="demo"
-              title="데모 앱이에요"
-              text="지도, 경로, 교통 정보는 모두 모의 데이터이고 실제 주행에는 쓸 수 없어요. 사용자 정보는 서버로 보내지 않아요."
-            />
           </>
         ) : null}
 
         {step === 'frequency' ? (
           <>
-            <Text variant="title1" accessibilityRole="header">
-              최근에 운전을 얼마나 자주 하세요?
-            </Text>
-            <Text variant="body" color={colors.textSecondary}>
-              정답은 없어요. 이 답으로 운전 실력을 평가하지 않고, 아직 정하지 않은 항목의 시작점으로만 써요.
-            </Text>
+            <View style={styles.titleBlock}>
+              <Text variant="title1" accessibilityRole="header">
+                운전은 얼마나{'\n'}자주 하세요?
+              </Text>
+              <Text variant="body" color={colors.textSecondary}>
+                정답은 없어요. 운전 실력을 평가하는 게 아니라, 아직 정하지 않은 항목의 시작점으로만 써요.
+              </Text>
+            </View>
             <View style={styles.cards} accessibilityRole="radiogroup">
               {FREQUENCY_OPTIONS.map((o) => (
                 <SelectCard
@@ -168,18 +155,21 @@ export function OnboardingScreen() {
 
         {step === 'burdens' ? (
           <>
-            <Text variant="title1" accessibilityRole="header">
-              특히 부담스러운 운전 요소가 있나요?
-            </Text>
-            <Text variant="body" color={colors.textSecondary}>
-              여러 개를 골라도 돼요. 고른 요소는 추천에서 되도록 피하는 쪽으로 계산해요. 나머지는 설정에서 더 세밀하게 정할 수 있어요.
-            </Text>
+            <View style={styles.titleBlock}>
+              <Text variant="title1" accessibilityRole="header">
+                어떤 운전이 특히{'\n'}부담스러우세요?
+              </Text>
+              <Text variant="body" color={colors.textSecondary}>
+                여러 개를 골라도 돼요. 고른 건 길을 찾을 때 되도록 피하는 쪽으로 계산해요. 나머지는 설정에서 더 세밀하게 정할 수 있어요.
+              </Text>
+            </View>
             <View style={styles.cards}>
               {ONBOARDING_FACTORS.map((code) => (
                 <SelectCard
                   key={code}
                   testID={`burden-${code}`}
                   mode="multi"
+                  leadingIcon={FACTORS[code].icon as IconName}
                   title={FACTORS[code].burdenSentence!}
                   description={FACTORS[code].description}
                   selected={burdens.includes(code)}
@@ -199,16 +189,14 @@ export function OnboardingScreen() {
 
         {step === 'routePrefs' ? (
           <>
-            <Text variant="title1" accessibilityRole="header">
-              경로 취향을 알려주세요
-            </Text>
-            <Text variant="body" color={colors.textSecondary}>
-              지금 고른 값은 정답이 아니라 시작점이에요. 언제든 설정에서 바꿀 수 있어요.
-            </Text>
-
-            <Text variant="heading" style={styles.sub}>
-              어떤 도로가 편하세요?
-            </Text>
+            <View style={styles.titleBlock}>
+              <Text variant="title1" accessibilityRole="header">
+                어떤 길이{'\n'}더 편하세요?
+              </Text>
+              <Text variant="body" color={colors.textSecondary}>
+                지금 고른 값은 정답이 아니라 시작점이에요. 언제든 설정에서 바꿀 수 있어요.
+              </Text>
+            </View>
             <View style={styles.cards} accessibilityRole="radiogroup">
               {ROAD_OPTIONS.map((o) => (
                 <SelectCard
@@ -222,71 +210,79 @@ export function OnboardingScreen() {
               ))}
             </View>
 
-            <Text variant="heading" style={styles.sub}>
-              쉬운 길을 위해 얼마나 더 걸려도 괜찮으세요?
-            </Text>
-            <Text variant="caption" color={colors.textSecondary}>
-              가장 빠른 경로보다 늘어나도 괜찮은 시간이에요. 이 시간 안에서 운전 부담이 적은 경로를 먼저 보여드려요.
-            </Text>
-            <View style={styles.chips} accessibilityRole="radiogroup">
+            <View style={styles.titleBlock}>
+              <Text variant="heading" accessibilityRole="header">
+                쉬운 길을 위해 얼마나 더 걸려도 괜찮으세요?
+              </Text>
+              <Text variant="caption" color={colors.textSecondary}>
+                가장 빠른 길보다 늘어나도 괜찮은 시간이에요. 이 안에서 운전 부담이 적은 길을 먼저 보여 드려요.
+              </Text>
+            </View>
+            <View style={styles.tiles} accessibilityRole="radiogroup">
               {EXTRA_OPTIONS.map((m) => (
-                <Chip key={m} testID={`extra-${m}`} label={`${m}분`} selected={extra === m} onPress={() => setExtra(m)} />
+                <TimeTile key={m} testID={`extra-${m}`} minutes={m} selected={extra === m} onPress={() => setExtra(m)} />
               ))}
+            </View>
+            <View style={styles.unsureRow}>
               <Chip
                 testID="extra-unsure"
                 label="잘 모르겠어요"
                 selected={!EXTRA_OPTIONS.includes(extra)}
                 onPress={() => setExtra(DEFAULT_MAX_EXTRA_MINUTES)}
               />
+              {!EXTRA_OPTIONS.includes(extra) ? (
+                <Text variant="caption" color={colors.textSecondary} style={styles.flex}>
+                  잘 모르겠다면 {DEFAULT_MAX_EXTRA_MINUTES}분으로 시작해요.
+                </Text>
+              ) : null}
             </View>
-            {!EXTRA_OPTIONS.includes(extra) ? (
-              <Text variant="caption" color={colors.textSecondary}>
-                잘 모르겠다면 {DEFAULT_MAX_EXTRA_MINUTES}분으로 시작해요.
-              </Text>
-            ) : null}
           </>
         ) : null}
 
         {step === 'finish' ? (
           <>
-            <Text variant="title1" accessibilityRole="header">
-              준비됐어요
-            </Text>
-            <View style={styles.summary}>
+            <View style={styles.titleBlock}>
+              <Text variant="title1" accessibilityRole="header">
+                준비됐어요!
+              </Text>
+              <Text variant="body" color={colors.textSecondary}>
+                이 설정으로 경로를 비교해 드릴게요. 모두 설정에서 언제든 바꿀 수 있어요.
+              </Text>
+            </View>
+            <Card style={styles.summary}>
               <SummaryRow label="운전 빈도" value={FREQUENCY_LABEL[frequency]} />
               <SummaryRow
-                label="피하고 싶은 요소"
+                label="피하고 싶은 것"
                 value={burdens.length > 0 ? burdens.map((c) => FACTORS[c].label).join(', ') : '정하지 않음 (자동)'}
               />
-              <SummaryRow
-                label="도로 유형"
-                value={ROAD_OPTIONS.find((o) => o.value === roadType)?.title ?? '상관없어요'}
-              />
-              <SummaryRow label="허용 추가 시간" value={`최대 +${extra}분`} />
-            </View>
+              <SummaryRow label="도로 유형" value={ROAD_OPTIONS.find((o) => o.value === roadType)?.title ?? '상관없어요'} />
+              <SummaryRow label="돌아가도 괜찮은 시간" value={`최대 +${extra}분`} />
+            </Card>
 
-            <Text variant="heading" style={styles.sub}>
-              기록과 개인화
-            </Text>
-            <Text variant="caption" color={colors.textSecondary}>
-              둘 다 꺼 둬도 경로 추천은 그대로 쓸 수 있어요. 데이터는 이 기기에만 저장되고 서버로 보내지 않아요. 암호화는 하지 않아요.
-            </Text>
-            <View style={styles.switches}>
+            <View style={styles.titleBlock}>
+              <Text variant="heading" accessibilityRole="header">
+                기록과 개인화
+              </Text>
+              <Text variant="caption" color={colors.textSecondary}>
+                둘 다 꺼 둬도 경로 추천은 그대로 쓸 수 있어요. 데이터는 이 기기에만 저장되고 서버로 보내지 않아요. 저장값을 암호화하지는 않아요.
+              </Text>
+            </View>
+            <Group>
               <SwitchRow
                 testID="consent-records"
-                label="시뮬레이션 기록 저장"
-                description="끝낸 시뮬레이션을 ‘운전 기록’에 남겨요. 실제 운전 기록이 아니에요."
+                label="주행 기록 저장"
+                description="안내를 마친 주행을 ‘주행 기록’에 남겨요."
                 value={saveRecords}
                 onValueChange={setSaveRecords}
               />
               <SwitchRow
                 testID="consent-personalization"
                 label="평가를 추천에 반영"
-                description="‘어려웠어요’ 같은 평가를 고르면, 그 요소를 피하는 정도를 조금 조정해요. 모의 규칙이에요."
+                description="‘어려웠어요’를 고르면 그 요소를 덜 만나는 길을 먼저 보여 드려요."
                 value={personalization}
                 onValueChange={setPersonalization}
               />
-            </View>
+            </Group>
           </>
         ) : null}
       </ScrollView>
@@ -294,6 +290,9 @@ export function OnboardingScreen() {
       <ActionBar>
         {step === 'welcome' ? (
           <>
+            <Text variant="caption" color={colors.textTertiary} align="center">
+              시연용 데이터로 동작해요 · 실제 주행에는 쓸 수 없어요
+            </Text>
             <Button testID="onboarding-start" title="시작하기" onPress={next} />
             <Button testID="onboarding-skip-welcome" title="건너뛰고 둘러보기" variant="tertiary" onPress={() => finish({ skipConsent: true })} />
           </>
@@ -304,6 +303,32 @@ export function OnboardingScreen() {
         )}
       </ActionBar>
     </Screen>
+  );
+}
+
+/** 허용 추가 시간 선택 타일: 숫자를 크게 보여준다 */
+function TimeTile({ minutes, selected, onPress, testID }: { minutes: number; selected: boolean; onPress: () => void; testID: string }) {
+  return (
+    <PressableScale
+      testID={testID}
+      accessibilityRole="radio"
+      accessibilityLabel={`${minutes}분`}
+      aria-checked={selected}
+      onPress={() => {
+        haptics.selection();
+        onPress();
+      }}
+      pressedScale={0.96}
+      style={styles.tileOuter}
+      contentStyle={[styles.tile, selected ? styles.tileOn : styles.tileOff]}
+    >
+      <Text variant="metric" color={selected ? colors.onPrimary : colors.text}>
+        +{minutes}
+      </Text>
+      <Text variant="captionStrong" color={selected ? colors.onPrimary : colors.textSecondary}>
+        분까지
+      </Text>
+    </PressableScale>
   );
 }
 
@@ -323,38 +348,19 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: layout.screenX - 8, minHeight: 56 },
   topSpacer: { width: 48 },
   progress: { flex: 1, flexDirection: 'row', gap: space.xs + 2 },
-  progressBar: { flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.border },
+  progressBar: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.surfaceStrong },
   progressBarOn: { backgroundColor: colors.primary },
-  content: { paddingHorizontal: layout.screenX, paddingTop: space.lg, paddingBottom: space.xl, gap: space.lg },
-  mark: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.card,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  benefits: { gap: space.md },
-  benefit: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-  benefitIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.control,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  content: { paddingHorizontal: layout.screenX, paddingTop: space.md, paddingBottom: space.xl, gap: space.xl },
+  // 환영 화면은 일러스트와 문구를 화면 가운데 쯤에 둔다
+  contentCentered: { flexGrow: 1, justifyContent: 'center' },
+  titleBlock: { gap: space.sm },
   cards: { gap: space.sm },
-  sub: { marginTop: space.md },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  summary: {
-    gap: space.md,
-    padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  tiles: { flexDirection: 'row', gap: space.sm },
+  tileOuter: { flex: 1 },
+  tile: { alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 92, borderRadius: radius.card, borderWidth: 2 },
+  tileOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tileOff: { backgroundColor: colors.surface, borderColor: colors.surface },
+  unsureRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' },
+  summary: { gap: space.lg },
   summaryRow: { gap: 2 },
-  switches: { backgroundColor: colors.surface, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
 });

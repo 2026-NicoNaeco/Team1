@@ -8,6 +8,7 @@ import {
   formatWon,
   josa,
   minutesFromSeconds,
+  placeLabel,
 } from '../format';
 import { known, partial, unknown } from './fixtures';
 
@@ -90,5 +91,13 @@ describe('운전 요소 표시: 0 / 정보 없음 / 일부 확인 구분', () =>
   it('도로 유형: 고속도로 km 또는 일반도로만', () => {
     expect(factorSummary('ROAD_TYPE', known('ROAD_TYPE', 10.56)).text).toBe('고속도로 10.6km');
     expect(factorSummary('ROAD_TYPE', known('ROAD_TYPE', 0))).toEqual({ text: '일반도로만 지나요', state: 'none' });
+  });
+});
+
+describe('장소 이름 표시 (placeLabel)', () => {
+  it('시연용 출발지의 꼬리표만 떼고 보여준다', () => {
+    expect(placeLabel('새싹역 앞 (데모 위치)')).toBe('새싹역 앞');
+    expect(placeLabel('한빛대학교 정문')).toBe('한빛대학교 정문');
+    expect(placeLabel('물빛천 둔치 주차장 (진입로 공사)')).toBe('물빛천 둔치 주차장 (진입로 공사)');
   });
 });

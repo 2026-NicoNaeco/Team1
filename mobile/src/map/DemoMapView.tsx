@@ -9,6 +9,7 @@ import {
   type NativeTouchEvent,
 } from 'react-native';
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
+import { getDecorTiles } from '../mock/demoCity/decor';
 import { geoToLocal } from '../mock/demoCity/projection';
 import {
   COMPOUNDS,
@@ -47,17 +48,19 @@ import { NO_INSETS, type CameraRequest, type Insets, type MapAdapterProps, type 
 
 /** 지도 전체 도시의 범위 (오버뷰에서 한 화면에 담는 영역) */
 const CITY_EXTENT: LocalPoint[] = [
-  { x: 700, y: 700 },
-  { x: 9800, y: 6300 },
+  { x: 450, y: 500 },
+  { x: 10050, y: 6450 },
 ];
 const MAX_SCALE = 0.55;
 const FOLLOW_DEFAULT_SCALE = 0.2;
 /** 오른쪽 확대·축소 컨트롤 열의 폭. 경로와 라벨이 컨트롤 아래에 깔리지 않도록 보이는 영역에서 뺀다 */
 const CONTROLS_WIDTH = 64;
-/** "데모 지도" 표시의 기본 높이(측정 전 추정값). 실제 높이를 잰 뒤에는 그 값을 쓴다 */
-const ATTRIBUTION_ESTIMATE = 40;
-/** 글자가 이 배율보다 크면 안내 문구를 짧게 줄여 지도를 가리지 않게 한다 */
-const COMPACT_ATTRIBUTION_SCALE = 1.3;
+/** 이 확대율(px/m)보다 멀리서 보면 골목은 그리지 않는다 */
+const STREETS_MIN_SCALE = 0.016;
+/** 이 확대율보다 멀리서 보면 건물 윗면은 점이 되므로 그리지 않는다 */
+const BUILDINGS_MIN_SCALE = 0.06;
+/** 경로 위 진행 방향 화살표 사이의 화면 간격(px) */
+const ARROW_GAP_PX = 64;
 /** 이 확대율보다 멀리서 보면 통행 제한 표시는 의미 없는 얼룩이 되므로 그리지 않는다 */
 const RESTRICTED_MIN_SCALE = 0.045;
 /** 지도를 눌렀을 때 경로로 인정하는 거리(px) */
@@ -100,7 +103,7 @@ const LABEL_STYLE: Record<MapLabel['kind'], { size: number; weight: '400' | '600
   district: { size: 14, weight: '600', color: mapColors.labelMuted, spacing: 3 },
   place: { size: 13, weight: '700', color: mapColors.label, spacing: 0 },
   road: { size: 11.5, weight: '600', color: mapColors.labelMuted, spacing: 0 },
-  water: { size: 12.5, weight: '600', color: '#4C7890', spacing: 2 },
+  water: { size: 12.5, weight: '600', color: mapColors.labelWater, spacing: 2 },
   note: { size: 11.5, weight: '700', color: colors.caution, spacing: 0 },
 };
 
@@ -208,6 +211,92 @@ function HaloText({ x, y, text, size, weight, color, spacing = 0, anchor = 'midd
   );
 }
 
+// ───────────────────────── 장식 배경(골목·건물) ─────────────────────────
+
+const TileStreets = memo(function TileStreets({ d, width, casing, opacity }: { d: string; width: number; casing: boolean; opacity: number }) {
+  return (
+    <Path
+      d={d}
+      stroke={casing ? mapColors.streetCasing : mapColors.streetMinor}
+      strokeWidth={width}
+      strokeLinecap="round"
+      strokeOpacity={opacity}
+      fill="none"
+    />
+  );
+});
+
+const TileBuildings = memo(function TileBuildings({ d }: { d: string }) {
+  return <Path d={d} fill={mapColors.building} />;
+});
+
+/**
+ * 골목과 건물 같은 장식 배경. 세계 좌표 그대로 그리고 변환 한 번으로 화면에 맞춘다.
+ * 지도를 끌 때는 경로 문자열을 다시 만들지 않고, 화면에 보이는 구역(타일)만 그린다.
+ */
+function DecorLayer({ cam, size }: { cam: Camera; size: Size }) {
+  const s = cam.scale;
+  if (s < STREETS_MIN_SCALE) return null;
+  const halfW = size.w / 2 / s + 450;
+  const halfH = size.h / 2 / s + 450;
+  const tiles = getDecorTiles().filter(
+    (t) => t.maxX >= cam.cx - halfW && t.minX <= cam.cx + halfW && t.maxY >= cam.cy - halfH && t.minY <= cam.cy + halfH,
+  );
+  // 선 굵기는 화면에서 같은 두께로 보이도록 세계 좌표 변환의 배율만큼 나눠 준다 (0.25px 단위로 맞춰 불필요한 다시 그리기를 줄인다)
+  const px = Math.round(clamp(10 * s, 1, 3) * 4) / 4;
+  // 멀리서는 방안지처럼 보이지 않도록 테두리를 빼고 선을 연하게 한다
+  const far = s < 0.045;
+  const farOpacity = far ? Math.max(0.35, (s - STREETS_MIN_SCALE) / (0.045 - STREETS_MIN_SCALE)) : 1;
+  const matrix = `matrix(${s} 0 0 ${-s} ${size.w / 2 - cam.cx * s} ${size.h / 2 + cam.cy * s})`;
+  return (
+    <G transform={matrix}>
+      {far
+        ? null
+        : tiles.map((t) => <TileStreets key={`c${t.minX}:${t.minY}`} d={t.streets} width={(px + 1.6) / s} casing opacity={1} />)}
+      {tiles.map((t) => (
+        <TileStreets key={`f${t.minX}:${t.minY}`} d={t.streets} width={px / s} casing={false} opacity={farOpacity} />
+      ))}
+      {s >= BUILDINGS_MIN_SCALE ? tiles.map((t) => <TileBuildings key={`b${t.minX}:${t.minY}`} d={t.buildings} />) : null}
+    </G>
+  );
+}
+
+/** 경로선 위에 일정한 화면 간격으로 진행 방향을 가리키는 작은 화살표(꺾쇠)를 그린다 */
+function arrowsD(points: readonly LocalPoint[], cam: Camera, size: Size): string {
+  if (points.length < 2) return '';
+  let d = '';
+  let carry = ARROW_GAP_PX / 2;
+  let prev = project(points[0]!, cam, size);
+  for (let i = 1; i < points.length; i++) {
+    const cur = project(points[i]!, cam, size);
+    const dx = cur.x - prev.x;
+    const dy = cur.y - prev.y;
+    const len = Math.hypot(dx, dy);
+    if (len > 0) {
+      const ux = dx / len;
+      const uy = dy / len;
+      let at = carry;
+      while (at <= len) {
+        const x = prev.x + ux * at;
+        const y = prev.y + uy * at;
+        if (x > -20 && x < size.w + 20 && y > -20 && y < size.h + 20) {
+          const tipX = x + ux * 3.2;
+          const tipY = y + uy * 3.2;
+          const baseX = x - ux * 2.6;
+          const baseY = y - uy * 2.6;
+          const nx = -uy * 3.6;
+          const ny = ux * 3.6;
+          d += `M${(baseX + nx).toFixed(1)} ${(baseY + ny).toFixed(1)}L${tipX.toFixed(1)} ${tipY.toFixed(1)}L${(baseX - nx).toFixed(1)} ${(baseY - ny).toFixed(1)}`;
+        }
+        at += ARROW_GAP_PX;
+      }
+      carry = at - len;
+    }
+    prev = cur;
+  }
+  return d;
+}
+
 // ───────────────────────── SVG 본체 ─────────────────────────
 
 interface WorldRoute {
@@ -251,8 +340,8 @@ const MapSvg = memo(function MapSvg({ cam, size, routes, markers, reservedBoxes 
   const riverPx = Math.max(7, RIVER.width * cam.scale);
 
   const drawRoute = (route: WorldRoute, selected: boolean) => {
-    const widthMain = selected ? 8 : 6;
-    const widthCasing = selected ? 13 : 10;
+    const widthMain = selected ? 9 : 7;
+    const widthCasing = selected ? 14 : 11;
     const mainColor = selected ? mapColors.routeSelected : mapColors.routeAlt;
     const split = route.traveledM && route.traveledM > 0 ? splitPolyline(route.points, route.traveledM) : null;
     const remaining = split ? split[1] : route.points;
@@ -265,6 +354,9 @@ const MapSvg = memo(function MapSvg({ cam, size, routes, markers, reservedBoxes 
         {remaining.length > 1 ? (
           <Path d={pathD(remaining, cam, size)} stroke={mainColor} strokeWidth={widthMain} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         ) : null}
+        {selected && remaining.length > 1 ? (
+          <Path d={arrowsD(remaining, cam, size)} stroke="#FFFFFF" strokeWidth={2.3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        ) : null}
       </G>
     );
   };
@@ -276,6 +368,7 @@ const MapSvg = memo(function MapSvg({ cam, size, routes, markers, reservedBoxes 
       {COMPOUNDS.map((c) => (
         <Path key={c.id} d={pathD(c.points, cam, size, true)} fill={c.kind === 'campus' ? mapColors.campus : mapColors.block} />
       ))}
+      <DecorLayer cam={cam} size={size} />
       {PARKS.map((park, i) => (
         <Path key={`park-${i}`} d={pathD(park, cam, size, true)} fill={mapColors.park} />
       ))}
@@ -369,8 +462,6 @@ export function DemoMapView({
 }: MapAdapterProps) {
   const reducedMotion = useReducedMotion();
   const fontScale = useFontScale();
-  const compactAttribution = fontScale > COMPACT_ATTRIBUTION_SCALE;
-  const [attributionHeight, setAttributionHeight] = useState<number | null>(null);
   const [size, setSize] = useState<Size | null>(null);
   const [cam, setCam] = useState<Camera | null>(null);
   /** 사용자가 지도를 끌거나 확대·축소해서 요청한 화면에서 벗어났는지. 벗어났을 때만 "처음 화면으로 돌아가기"를 보여준다 */
@@ -412,7 +503,7 @@ export function DemoMapView({
 
   // 컨트롤 열은 지도 위에 떠 있으므로 보이는 영역에서 그만큼 뺀 안쪽에 경로를 맞춘다
   const reserved: Insets = {
-    top: insets.top + (attributionHeight ?? ATTRIBUTION_ESTIMATE) + space.sm,
+    top: insets.top + space.sm,
     bottom: insets.bottom,
     left: insets.left,
     right: insets.right + (interactive ? CONTROLS_WIDTH : 0),
@@ -619,18 +710,14 @@ export function DemoMapView({
             })
         : null}
 
-      <View
-        style={[styles.attribution, { top: topOffset }]}
-        onLayout={(e) => setAttributionHeight(Math.round(e.nativeEvent.layout.height))}
-      >
-        <Icon name="map" size={14} color={colors.textSecondary} />
-        <Text variant="micro" color={colors.textSecondary} style={styles.attributionText} numberOfLines={compactAttribution ? 1 : 2}>
-          {compactAttribution ? '가상의 데모 지도' : '데모 지도 · 가상의 지역 (실제 도로 아님)'}
+      <View style={[styles.attribution, { bottom: insets.bottom + space.sm }]}>
+        <Text variant="micro" color={colors.textTertiary}>
+          시연용 지도
         </Text>
       </View>
 
       {interactive && size && size.h - reserved.top - reserved.bottom >= 150 ? (
-        <View style={[styles.controls, { top: topOffset + 40 }]}>
+        <View style={[styles.controls, { top: topOffset }]}>
           <IconButton icon="plus" label="지도 확대" variant="floating" onPress={() => zoomBy(ZOOM_STEP)} />
           <IconButton icon="minus" label="지도 축소" variant="floating" onPress={() => zoomBy(1 / ZOOM_STEP)} />
           {moved ? (
@@ -653,26 +740,19 @@ const styles = StyleSheet.create({
     minHeight: 34,
     paddingHorizontal: space.md,
     paddingVertical: 4,
-    borderRadius: radius.control,
-    borderWidth: 1.5,
+    borderRadius: radius.round,
+    borderWidth: 1,
   },
-  chipIdle: { backgroundColor: colors.surface, borderColor: mapColors.routeAlt },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.surface },
+  chipIdle: { backgroundColor: colors.surface, borderColor: colors.border },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   attribution: {
     position: 'absolute',
-    left: space.md,
-    maxWidth: '70%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: space.sm,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: colors.border,
+    right: space.md,
+    paddingHorizontal: space.sm + 2,
+    paddingVertical: 3,
+    borderRadius: radius.round,
+    backgroundColor: 'rgba(255,255,255,0.82)',
     pointerEvents: 'none',
   },
-  attributionText: { flexShrink: 1 },
   controls: { position: 'absolute', right: space.md, gap: space.sm, pointerEvents: 'box-none' },
 });

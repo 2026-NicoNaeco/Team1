@@ -1,5 +1,7 @@
-import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, Animated, Easing, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, layout, radius, space } from '../design/tokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
@@ -22,23 +24,27 @@ interface StateProps {
 
 /**
  * 빈 화면·오류 화면. 어떤 경우든 사용자가 다음에 할 수 있는 행동(actions)을 함께 준다.
- * 빈 상태는 중립, 오류는 오류 색으로 구분한다.
+ * 빈 상태는 브랜드색, 오류는 오류 색의 동그라미 아이콘으로 구분한다.
  */
 export function StateView({ icon, title, message, actions = [], tone = 'neutral', style, testID }: StateProps) {
   const error = tone === 'error';
   return (
     <View testID={testID} style={[styles.wrap, style]} accessibilityRole={error ? 'alert' : undefined}>
-      <View style={[styles.iconBox, error ? styles.iconError : styles.iconNeutral]}>
-        <Icon name={icon} size={28} color={error ? colors.danger : colors.textSecondary} />
+      <View style={[styles.ring, error ? styles.ringError : styles.ringNeutral]}>
+        <View style={[styles.iconBox, error ? styles.iconError : styles.iconNeutral]}>
+          <Icon name={icon} size={30} color={error ? colors.dangerText : colors.primaryStrong} />
+        </View>
       </View>
-      <Text variant="heading" align="center">
-        {title}
-      </Text>
-      {message ? (
-        <Text variant="body" color={colors.textSecondary} align="center">
-          {message}
+      <View style={styles.texts}>
+        <Text variant="title2" align="center">
+          {title}
         </Text>
-      ) : null}
+        {message ? (
+          <Text variant="body" color={colors.textSecondary} align="center">
+            {message}
+          </Text>
+        ) : null}
+      </View>
       {actions.length > 0 ? (
         <View style={styles.actions}>
           {actions.map((a, i) => (
@@ -62,17 +68,37 @@ export function LoadingView({ message, style }: { message: string; style?: Style
   );
 }
 
-/** 자리만 잡아 주는 정적 스켈레톤 (움직이지 않는다) */
+/** 자리를 잡아 주는 스켈레톤. 천천히 깜빡이며, 모션 줄이기를 켜면 멈춘다. */
 export function SkeletonBlock({ height, style }: { height: number; style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.skeleton, { height }, style]} />;
+  const reducedMotion = useReducedMotion();
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (reducedMotion) {
+      opacity.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.5, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(opacity, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: Platform.OS !== 'web' }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity, reducedMotion]);
+  return <Animated.View aria-hidden style={[styles.skeleton, { height, opacity }, style]} />;
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: space.md, paddingHorizontal: layout.screenX, paddingVertical: space.xl },
-  iconBox: { width: 56, height: 56, borderRadius: radius.card, alignItems: 'center', justifyContent: 'center' },
-  iconNeutral: { backgroundColor: colors.surfaceMuted },
-  iconError: { backgroundColor: colors.dangerBg },
-  actions: { alignSelf: 'stretch', gap: space.sm, marginTop: space.sm },
+  wrap: { alignItems: 'center', gap: space.xl, paddingHorizontal: layout.screenX, paddingVertical: space.xxl },
+  ring: { width: 108, height: 108, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
+  ringNeutral: { backgroundColor: colors.primarySofter },
+  ringError: { backgroundColor: colors.dangerBg },
+  iconBox: { width: 72, height: 72, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
+  iconNeutral: { backgroundColor: colors.primarySoft },
+  iconError: { backgroundColor: '#FBD9D6' },
+  texts: { gap: space.sm, alignItems: 'center' },
+  actions: { alignSelf: 'stretch', gap: space.sm },
   loading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, paddingVertical: space.md },
-  skeleton: { backgroundColor: colors.surfaceMuted, borderRadius: radius.card },
+  skeleton: { backgroundColor: colors.surfaceStrong, borderRadius: radius.card },
 });

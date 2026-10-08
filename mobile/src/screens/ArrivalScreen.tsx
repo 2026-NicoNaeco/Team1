@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { FACTOR_ORDER, FACTORS } from '../domain/factors';
-import { factorSummary, formatDistance, formatMinutes } from '../domain/format';
+import { factorSummary, formatDistance, formatMinutes, placeLabel } from '../domain/format';
 import { previewLearning } from '../domain/learning';
 import { createSimulationRecord } from '../domain/records';
 import type { FactorCode, Feedback, FeedbackRating } from '../domain/types';
@@ -11,20 +11,24 @@ import { useAppStore } from '../state/appStore';
 import { clock } from '../state/clock';
 import { useTripStore } from '../state/tripStore';
 import { useUiStore } from '../state/uiStore';
-import { DemoBadge, LetterBadge } from '../ui/Badges';
+import { LetterBadge } from '../ui/Badges';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Chip } from '../ui/Chip';
-import { Icon } from '../ui/Icon';
+import { Icon, type IconName } from '../ui/Icon';
+import { DoneBadge } from '../ui/Illustration';
 import { Notice } from '../ui/Notice';
+import { PressableScale } from '../ui/PressableScale';
 import { ActionBar, Screen } from '../ui/Screen';
-import { SwitchRow } from '../ui/Rows';
+import { Group, SwitchRow } from '../ui/Rows';
 import { StateView } from '../ui/StateViews';
 import { Text } from '../ui/Text';
+import { haptics } from '../ui/haptics';
 
-const RATINGS: Array<{ value: FeedbackRating; label: string; pips: number }> = [
-  { value: 'easy', label: '쉬웠어요', pips: 1 },
-  { value: 'normal', label: '보통이에요', pips: 2 },
-  { value: 'hard', label: '어려웠어요', pips: 3 },
+const RATINGS: Array<{ value: FeedbackRating; label: string; icon: IconName; fg: string; bg: string }> = [
+  { value: 'easy', label: '쉬웠어요', icon: 'smile', fg: colors.success, bg: colors.successBg },
+  { value: 'normal', label: '보통이에요', icon: 'meh', fg: colors.caution, bg: colors.cautionBg },
+  { value: 'hard', label: '어려웠어요', icon: 'frown', fg: colors.warn, bg: colors.warnBg },
 ];
 
 const FACTOR_PROMPT: Record<FeedbackRating, string> = {
@@ -67,7 +71,7 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
       <Screen>
         <StateView
           icon="route"
-          title="표시할 시뮬레이션이 없어요"
+          title="표시할 주행이 없어요"
           actions={[{ label: '지도로 돌아가기', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] }) }]}
         />
       </Screen>
@@ -80,6 +84,7 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
   const effects = canApply && apply && rating ? previewLearning(profile, { rating, factors }) : [];
 
   const chooseRating = (value: FeedbackRating) => {
+    haptics.selection();
     setRating(value);
     setFactors([]);
   };
@@ -117,9 +122,10 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
     if (saved === 'failed') {
       showToast('이 기기에 저장하지 못했어요. 지도 화면에서 다시 저장할 수 있어요.', 'error');
     } else {
+      haptics.success();
       const parts = [
-        saved === 'saved' ? '시뮬레이션 기록에 저장했어요.' : '마쳤어요. 기록 저장이 꺼져 있어 남기지 않았어요.',
-        learned ? '평가를 추천에 반영했어요 (모의 규칙).' : '',
+        saved === 'saved' ? '주행 기록에 저장했어요.' : '마쳤어요. 기록 저장이 꺼져 있어 남기지 않았어요.',
+        learned ? '평가를 추천에 반영했어요.' : '',
       ];
       showToast(parts.filter(Boolean).join(' '), 'success');
     }
@@ -136,30 +142,25 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} testID="arrival-scroll">
-        <View style={styles.titleRow}>
-          <View style={[styles.mark, !arrived && styles.markStopped]}>
-            <Icon name={arrived ? 'flag' : 'pause'} size={24} color={arrived ? colors.onPrimary : colors.text} />
-          </View>
-          <View style={styles.flex}>
-            <Text variant="title1" accessibilityRole="header">
-              {arrived ? '도착했어요' : '시뮬레이션을 끝냈어요'}
-            </Text>
-            <Text variant="caption" color={colors.textSecondary}>
-              {arrived ? '시뮬레이션이 끝났어요. 실제 주행이 아니에요.' : `중간에 끝냈어요 (${Math.round(run.progress * 100)}% 진행). 실제 주행이 아니에요.`}
-            </Text>
-          </View>
+        <View style={styles.hero}>
+          <DoneBadge done={arrived} />
+          <Text variant="title1" align="center" accessibilityRole="header">
+            {arrived ? '도착했어요!' : '안내를 끝냈어요'}
+          </Text>
+          <Text variant="body" color={colors.textSecondary} align="center">
+            {arrived ? '수고하셨어요. 이번 길은 어땠는지 알려 주세요.' : `중간에 끝냈어요 (${Math.round(run.progress * 100)}% 진행).`}
+          </Text>
         </View>
 
-        <View style={styles.summary}>
+        <Card style={styles.summary}>
           <View style={styles.summaryTitle}>
-            <LetterBadge letter={run.route.label} selected size={32} />
-            <Text variant="bodyStrong" style={styles.flex}>
+            <LetterBadge letter={run.route.label} selected size={36} />
+            <Text variant="lead" style={styles.flex}>
               {run.ranked.headline}
             </Text>
-            <DemoBadge label="시뮬레이션" />
           </View>
           <Text variant="body" numberOfLines={3}>
-            {run.origin.name} → {run.destination.name}
+            {placeLabel(run.origin.name)} → {run.destination.name}
           </Text>
           <Text variant="caption" color={colors.textSecondary}>
             예상 {formatMinutes(run.ranked.durationMinutes)} · {formatDistance(run.route.distanceM)} · {run.route.via}
@@ -169,7 +170,7 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
               맞춤 추천과 다른 경로를 직접 골라 진행했어요.
             </Text>
           ) : null}
-        </View>
+        </Card>
 
         {!arrived ? (
           <Notice
@@ -180,37 +181,36 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
         ) : null}
 
         <View style={styles.section}>
-          <Text variant="heading" accessibilityRole="header">
-            이번 경로는 어땠나요?
-          </Text>
-          <Text variant="caption" color={colors.textSecondary}>
-            선택 사항이에요. 건너뛰어도 괜찮아요.
-          </Text>
+          <View style={styles.sectionHead}>
+            <Text variant="heading" accessibilityRole="header">
+              이번 경로는 어땠나요?
+            </Text>
+            <Text variant="caption" color={colors.textSecondary}>
+              선택 사항이에요. 건너뛰어도 괜찮아요.
+            </Text>
+          </View>
           <View style={styles.ratings} accessibilityRole="radiogroup">
             {RATINGS.map((r) => {
               const selected = rating === r.value;
               return (
-                <Pressable
+                <PressableScale
                   key={r.value}
                   testID={`rating-${r.value}`}
                   accessibilityRole="radio"
                   accessibilityLabel={r.label}
                   aria-checked={selected}
                   onPress={() => chooseRating(r.value)}
-                  style={({ pressed }) => [styles.rating, selected ? styles.ratingOn : styles.ratingOff, pressed && !selected && styles.ratingPressed]}
+                  pressedScale={0.95}
+                  style={styles.ratingOuter}
+                  contentStyle={[styles.rating, selected ? styles.ratingOn : styles.ratingOff]}
                 >
-                  <View style={styles.pips}>
-                    {[1, 2, 3].map((n) => (
-                      <View key={n} style={[styles.pip, n <= r.pips ? (selected ? styles.pipOnSel : styles.pipOn) : styles.pipOff]} />
-                    ))}
+                  <View style={[styles.face, { backgroundColor: r.bg }]}>
+                    <Icon name={r.icon} size={30} color={r.fg} strokeWidth={2.2} />
                   </View>
-                  <View style={styles.ratingLabel}>
-                    {selected ? <Icon name="check" size={16} color={colors.primary} strokeWidth={3} /> : null}
-                    <Text variant="bodyStrong" color={selected ? colors.primary : colors.text} align="center">
-                      {r.label}
-                    </Text>
-                  </View>
-                </Pressable>
+                  <Text variant="captionStrong" color={selected ? colors.primaryStrong : colors.text} align="center">
+                    {r.label}
+                  </Text>
+                </PressableScale>
               );
             })}
           </View>
@@ -242,20 +242,20 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
         {rating && rating !== 'normal' ? (
           personalizationOn ? (
             <View style={styles.section}>
-              <View style={styles.switchBox}>
+              <Group>
                 <SwitchRow
                   testID="feedback-apply"
                   label="이 평가를 앞으로의 추천에 반영"
-                  description={canApply ? '고른 요소를 피하는 정도를 조금 조정해요. 모의 규칙이에요.' : '요소를 고르면 반영할 수 있어요.'}
+                  description={canApply ? '고른 요소를 피하는 정도를 조금 조정해요.' : '요소를 고르면 반영할 수 있어요.'}
                   value={canApply && apply}
                   disabled={!canApply}
                   onValueChange={setApply}
                 />
-              </View>
+              </Group>
               {effects.map((e) => (
                 <Text key={e.factor} variant="caption" color={colors.textSecondary}>
                   {e.applied
-                    ? `‘${FACTORS[e.factor].label}’: 피하는 정도를 조금 ${e.direction === 'raise' ? '높여요' : '낮춰요'} (모의 규칙)`
+                    ? `‘${FACTORS[e.factor].label}’: 피하는 정도를 조금 ${e.direction === 'raise' ? '높여요' : '낮춰요'}`
                     : e.skipReason === 'user_override'
                       ? `‘${FACTORS[e.factor].label}’: 직접 정한 값이 있어서 그대로 유지돼요`
                       : `‘${FACTORS[e.factor].label}’: 추천 조정에 쓰이지 않는 항목이에요`}
@@ -267,10 +267,10 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
           )
         ) : null}
 
-        <Text variant="caption" color={colors.textSecondary}>
+        <Text variant="caption" color={colors.textTertiary} align="center">
           {profile.consent.saveRecords
-            ? '이 시뮬레이션은 이 기기의 ‘운전 기록’에 시뮬레이션 기록으로 저장돼요.'
-            : '기록 저장이 꺼져 있어서 이 시뮬레이션은 저장하지 않아요.'}
+            ? '이 주행은 이 기기의 ‘주행 기록’에 저장돼요.'
+            : '기록 저장이 꺼져 있어서 이 주행은 저장하지 않아요.'}
         </Text>
       </ScrollView>
 
@@ -283,20 +283,8 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
         />
         {!arrived ? (
           <View style={styles.restartRow}>
-            <Button
-              title="이어서 시작"
-              variant="secondary"
-              style={styles.flex}
-              onPress={() => restart(run.progressM)}
-              testID="arrival-resume"
-            />
-            <Button
-              title="처음부터 다시"
-              variant="secondary"
-              style={styles.flex}
-              onPress={() => restart(0)}
-              testID="arrival-restart"
-            />
+            <Button title="이어서 시작" variant="neutral" size="medium" style={styles.flex} onPress={() => restart(run.progressM)} testID="arrival-resume" />
+            <Button title="처음부터 다시" variant="neutral" size="medium" style={styles.flex} onPress={() => restart(0)} testID="arrival-restart" />
           </View>
         ) : null}
       </ActionBar>
@@ -306,42 +294,27 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { paddingHorizontal: layout.screenX, paddingTop: space.xl, paddingBottom: space.xl, gap: space.xl },
-  titleRow: { flexDirection: 'row', gap: space.md, alignItems: 'center' },
-  mark: { width: 48, height: 48, borderRadius: radius.card, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  markStopped: { backgroundColor: colors.surfaceMuted },
-  summary: {
-    gap: space.sm,
-    padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  summaryTitle: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  content: { paddingHorizontal: layout.screenX, paddingTop: space.xxl, paddingBottom: space.xl, gap: space.xl },
+  hero: { alignItems: 'center', gap: space.md },
+  summary: { gap: space.sm },
+  summaryTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   section: { gap: space.md },
+  sectionHead: { gap: space.xs },
   ratings: { flexDirection: 'row', gap: space.sm },
+  ratingOuter: { flex: 1 },
   rating: {
-    flex: 1,
-    minHeight: 84,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
-    paddingVertical: space.md,
+    minHeight: 112,
+    paddingVertical: space.lg,
     paddingHorizontal: space.xs,
     borderRadius: radius.card,
-    borderWidth: 1.5,
+    borderWidth: 2,
   },
-  ratingOff: { backgroundColor: colors.surface, borderColor: colors.border },
-  ratingOn: { backgroundColor: colors.primarySoft, borderColor: colors.primary, borderWidth: 2 },
-  ratingPressed: { backgroundColor: colors.surfaceMuted },
-  ratingLabel: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'center' },
-  pips: { flexDirection: 'row', gap: 3 },
-  pip: { width: 14, height: 7, borderRadius: 3 },
-  pipOn: { backgroundColor: '#3F5361' },
-  pipOnSel: { backgroundColor: colors.primary },
-  pipOff: { backgroundColor: colors.border },
+  ratingOff: { backgroundColor: colors.surface, borderColor: colors.surface },
+  ratingOn: { backgroundColor: colors.primarySofter, borderColor: colors.primary },
+  face: { width: 52, height: 52, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  switchBox: { backgroundColor: colors.surface, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   restartRow: { flexDirection: 'row', gap: space.sm },
 });

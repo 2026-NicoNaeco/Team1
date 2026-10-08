@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
-import { formatExtra, formatMinutes } from '../domain/format';
+import { formatExtra, formatMinutes, placeLabel } from '../domain/format';
 import type { RecommendationNotice, RouteCandidate } from '../domain/types';
 import { colors, layout, radius, shadow, space } from '../design/tokens';
 import { MapView, type CameraRequest, type MapMarker, type MapRoute } from '../map';
 import type { RootScreenProps } from '../navigation/types';
+import { useFontScale } from '../hooks/useFontScale';
 import { useTripStore } from '../state/tripStore';
 import { useUiStore } from '../state/uiStore';
-import { DemoBadge, LetterBadge } from '../ui/Badges';
+import { LetterBadge } from '../ui/Badges';
 import { BottomSheet } from '../ui/BottomSheet';
 import { burdenLabel } from '../ui/BurdenMeter';
 import { Button } from '../ui/Button';
@@ -35,7 +36,7 @@ const PEEK_SUMMARY_HEIGHT = 56;
 
 /**
  * 경로 비교: 지도에서 후보를 보고, 바텀시트의 카드로 비교해 하나를 고른다.
- * 카드를 누르면 선택만 바뀌고 주행이 시작되지는 않는다. 선택한 경로에 대한 행동은 하단 버튼 하나로 모았다.
+ * 카드를 누르면 선택만 바뀌고 안내가 시작되지는 않는다. 선택한 경로에 대한 행동은 하단 버튼으로 모았다.
  * 지도·카드·하단 버튼의 선택 상태는 같은 저장소 값(selectedRouteId)에서 나온다.
  */
 export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare'>) {
@@ -56,6 +57,8 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
   const selectRoute = useTripStore((s) => s.selectRoute);
   const clearRecomputeNotice = useTripStore((s) => s.clearRecomputeNotice);
   const showToast = useUiStore((s) => s.showToast);
+  // 큰 글자에서는 두 버튼을 세로로 쌓아 글자가 쪼개지지 않게 한다
+  const stacked = useFontScale() > 1.3;
 
   const [areaHeight, setAreaHeight] = useState(0);
   const [overlayHeight, setOverlayHeight] = useState(0);
@@ -146,6 +149,9 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
   const openDetail = () => {
     if (selected) navigation.navigate('RouteDetail', { routeId: selected.route.id });
   };
+  const startGuidance = () => {
+    if (selected) navigation.navigate('Navigation', { routeId: selected.route.id });
+  };
 
   const goSearchDestination = () => navigation.navigate('Search', { mode: 'destination' });
 
@@ -160,8 +166,8 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
           onRoutePress={selectRoute}
           accessibilityLabel={
             ready
-              ? `데모 지도에 경로 ${candidates.length}개가 표시되어 있어요. 아래 목록에서 경로를 선택할 수 있어요.`
-              : '데모 지도. 경로를 불러오는 중이에요.'
+              ? `지도에 경로 ${candidates.length}개가 표시되어 있어요. 아래 목록에서 경로를 선택할 수 있어요.`
+              : '지도. 경로를 불러오는 중이에요.'
           }
           testID="compare-map"
         />
@@ -174,13 +180,10 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
           header={
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleRow} onLayout={(e) => setTitleRowHeight(e.nativeEvent.layout.height)}>
-                <Text variant="bodyStrong" style={styles.sheetTitle} accessibilityRole="header">
+                <Text variant="lead" style={styles.sheetTitle} accessibilityRole="header">
                   {title}
                 </Text>
-                <DemoBadge />
-                {ready ? (
-                  <Button title={toggleLabel} variant="tertiary" fullWidth={false} onPress={onToggle} testID="sheet-toggle" />
-                ) : null}
+                {ready ? <Button title={toggleLabel} variant="tertiary" size="small" fullWidth={false} onPress={onToggle} testID="sheet-toggle" /> : null}
               </View>
               {sheetIndex === 0 && selected ? (
                 <Pressable
@@ -198,7 +201,7 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
                       {formatMinutes(selected.item.durationMinutes)} · {formatExtra(selected.item.extraMinutes)} · 예상 운전 부담 {burdenLabel(selected.item.burdenLevel)}
                     </Text>
                   </View>
-                  <Icon name="chevron-up" size={20} color={colors.textSecondary} />
+                  <Icon name="chevron-up" size={20} color={colors.textTertiary} />
                 </Pressable>
               ) : null}
             </View>
@@ -207,9 +210,9 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
           <View style={[styles.content, !ready && { paddingBottom: insets.bottom }]}>
             {status === 'loading' || status === 'idle' ? (
               <View style={styles.loading}>
-                <LoadingView message="데모 도로망에서 경로를 찾고 있어요" />
-                <SkeletonBlock height={190} />
-                <SkeletonBlock height={190} />
+                <LoadingView message="경로를 찾고 있어요" />
+                <SkeletonBlock height={220} />
+                <SkeletonBlock height={220} />
               </View>
             ) : null}
 
@@ -276,18 +279,15 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
                   .map((notice) => (
                     <Notice key={notice.kind} tone={NOTICE_TONE[notice.kind]} text={notice.text} />
                   ))}
-                <Text variant="caption" color={colors.textSecondary} align="center">
-                  경로·시간·통행료·혼잡도는 모두 데모 데이터예요. 실제 교통 정보가 아니에요.
+                <Text variant="caption" color={colors.textTertiary} align="center">
+                  예상 시간은 교통 상황에 따라 달라질 수 있어요.
                 </Text>
               </View>
             ) : null}
           </View>
         </BottomSheet>
 
-        <View
-          style={[styles.overlay, { paddingTop: insets.top + space.sm }]}
-          onLayout={(e) => setOverlayHeight(e.nativeEvent.layout.height)}
-        >
+        <View style={[styles.overlay, { paddingTop: insets.top + space.sm }]} onLayout={(e) => setOverlayHeight(e.nativeEvent.layout.height)}>
           <IconButton icon="back" label="뒤로 가기" variant="floating" onPress={() => navigation.goBack()} testID="compare-back" />
           <View style={[styles.trip, shadow.floating]}>
             <Pressable
@@ -297,11 +297,12 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
               hitSlop={{ top: 2, bottom: 2 }}
               style={styles.tripRow}
             >
-              <Text variant="captionStrong" color={colors.textSecondary} style={styles.tripLabel} numberOfLines={1}>
+              <View style={styles.tripDot} />
+              <Text variant="captionStrong" color={colors.textTertiary} style={styles.tripLabel} numberOfLines={1}>
                 출발
               </Text>
-              <Text variant="captionStrong" numberOfLines={2} style={styles.tripName}>
-                {origin.name}
+              <Text variant="bodyStrong" numberOfLines={2} style={styles.tripName}>
+                {placeLabel(origin.name)}
               </Text>
             </Pressable>
             <View style={styles.tripDivider} />
@@ -312,10 +313,11 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
               hitSlop={{ top: 2, bottom: 2 }}
               style={styles.tripRow}
             >
-              <Text variant="captionStrong" color={colors.textSecondary} style={styles.tripLabel} numberOfLines={1}>
+              <Icon name="pin" size={14} color={colors.text} strokeWidth={2.6} />
+              <Text variant="captionStrong" color={colors.textTertiary} style={styles.tripLabel} numberOfLines={1}>
                 도착
               </Text>
-              <Text variant="captionStrong" numberOfLines={2} style={styles.tripName}>
+              <Text variant="bodyStrong" numberOfLines={2} style={styles.tripName}>
                 {destination?.name ?? ''}
               </Text>
             </Pressable>
@@ -330,21 +332,27 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
               <Text variant="caption" color={colors.textSecondary} style={styles.differsText}>
                 맞춤 추천은 {recommended.route.label} 경로예요. 지금은 {selected.route.label} 경로를 골랐어요.
               </Text>
-              <Button
-                title="추천 경로로 바꾸기"
-                variant="tertiary"
-                fullWidth={false}
-                onPress={() => selectRoute(recommended.route.id)}
-              />
+              <Button title="추천 경로로 바꾸기" variant="tertiary" size="small" fullWidth={false} onPress={() => selectRoute(recommended.route.id)} />
             </View>
           ) : null}
-          <Button
-            testID="compare-detail"
-            title={`${selected.route.label} 경로 자세히 보기`}
-            icon="route"
-            onPress={openDetail}
-            accessibilityHint="선택한 경로의 이유와 구간을 자세히 보고 시뮬레이션을 시작할 수 있어요"
-          />
+          <View style={[styles.buttons, stacked && styles.buttonsStacked]}>
+            <Button
+              testID="compare-detail"
+              title="자세히"
+              accessibilityLabel="자세히 보기"
+              variant="neutral"
+              style={stacked ? styles.btnStacked : styles.btnDetail}
+              onPress={openDetail}
+              accessibilityHint="선택한 경로의 이유와 구간을 자세히 봐요"
+            />
+            <Button
+              testID="compare-start"
+              title={`${selected.route.label} 경로로 안내 시작`}
+              icon="navigation"
+              style={stacked ? styles.btnStacked : styles.btnStart}
+              onPress={startGuidance}
+            />
+          </View>
         </ActionBar>
       ) : null}
     </View>
@@ -366,11 +374,12 @@ const styles = StyleSheet.create({
     paddingBottom: space.xs,
     pointerEvents: 'box-none',
   },
-  trip: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, paddingHorizontal: space.md },
+  trip: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, paddingHorizontal: space.lg },
   tripRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 46, paddingVertical: 2 },
+  tripDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 3, borderColor: colors.text, backgroundColor: colors.surface },
   tripLabel: { flexShrink: 0 },
   tripName: { flex: 1 },
-  tripDivider: { height: 1, backgroundColor: colors.border },
+  tripDivider: { height: 1, backgroundColor: colors.border, marginLeft: space.xl },
   sheetHeader: { paddingHorizontal: layout.screenX, paddingBottom: space.sm, gap: space.xs },
   // 큰 글자에서는 버튼이 다음 줄로 내려가도록 줄바꿈을 허용하고, 제목은 글자 단위로 쪼개지지 않게 지킨다
   sheetTitleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.sm },
@@ -387,4 +396,10 @@ const styles = StyleSheet.create({
   cards: { gap: space.md },
   differs: { flexDirection: 'row', alignItems: 'center', gap: space.sm, justifyContent: 'space-between' },
   differsText: { flex: 1 },
+  buttons: { flexDirection: 'row', gap: space.sm },
+  // column-reverse 로 두면 마지막 버튼(안내 시작)이 위에 온다
+  buttonsStacked: { flexDirection: 'column-reverse' },
+  btnStacked: { alignSelf: 'stretch' },
+  btnDetail: { flex: 3 },
+  btnStart: { flex: 8 },
 });

@@ -12,7 +12,7 @@ function durationFor(text: string): number {
 }
 
 /**
- * 화면 위쪽에 잠깐 떠서 결과를 알려주는 메시지.
+ * 화면 위쪽에 잠깐 떠서 결과를 알려주는 어두운 알림.
  * 터치를 가로채지 않는다(아래의 뒤로 가기·검색창이 그대로 눌린다). 스크린리더에는 live region 으로 읽어준다.
  */
 export function ToastHost() {
@@ -34,15 +34,15 @@ export function ToastHost() {
         accessibilityRole="alert"
         accessibilityLiveRegion="polite"
         accessibilityLabel={toast.text}
-        style={[styles.toast, shadow.floating, error && styles.error]}
+        style={[styles.toast, shadow.floating]}
         testID="toast"
       >
         <Icon
           name={error ? 'alert-circle' : toast.tone === 'success' ? 'check-circle' : 'info'}
           size={20}
-          color={error ? colors.danger : colors.primary}
+          color={error ? '#FF9A93' : '#7FDCCB'}
         />
-        <Text variant="captionStrong" style={styles.text} color={error ? colors.danger : colors.text}>
+        <Text variant="captionStrong" style={styles.text} color={colors.onInverse}>
           {toast.text}
         </Text>
       </View>
@@ -66,13 +66,10 @@ const styles = StyleSheet.create({
     gap: space.sm,
     minHeight: layout.minTouch,
     paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: space.md,
+    borderRadius: radius.field,
+    backgroundColor: colors.inverse,
     maxWidth: 480,
   },
-  error: { borderColor: colors.danger, backgroundColor: colors.dangerBg },
   text: { flexShrink: 1 },
 });

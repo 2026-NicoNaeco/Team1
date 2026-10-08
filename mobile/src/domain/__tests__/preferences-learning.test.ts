@@ -69,7 +69,7 @@ describe('선호 해석 (resolvePreferences)', () => {
     const learned = applyLearning(p, emptyLearned(), hard('ROUNDABOUT'), NOW).learned;
     const prefs = resolvePreferences(p, learned);
     expect(describeFactorSetting('U_TURN', p, prefs).text).toBe('되도록 피하고 싶어요');
-    expect(describeFactorSetting('ROUNDABOUT', p, prefs).text).toContain('피드백 반영');
+    expect(describeFactorSetting('ROUNDABOUT', p, prefs).text).toContain('평가 반영');
     expect(describeFactorSetting('TRAFFIC_LIGHT', p, prefs).text).toBe('자동 · 보통');
   });
 });

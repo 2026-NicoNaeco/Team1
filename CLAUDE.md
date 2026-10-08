@@ -54,12 +54,12 @@ The tests use the `settings` fixture in `tests/conftest.py`, which disables all 
 
 ## Mobile app (`mobile/`)
 
-뉴비맵: a beginner-driver navigation front end, React Native 0.86 + Expo SDK 57 + TypeScript (strict), React Navigation 7, zustand, react-native-svg. It is a **demo with mock data**; it does not talk to the FastAPI backend. `mobile/README.md` (Korean) has the mock-vs-real table, the replacement points, the mapping to the backend API and the verification record, so keep it in sync when behaviour changes. UI copy and comments are Korean.
+뉴비맵: a beginner-driver navigation front end, React Native 0.86 + Expo SDK 57 + TypeScript (strict), React Navigation 7, zustand, react-native-svg. It runs on **mock data** (a fictional city), is phone-only (portrait; no desktop/PC layouts), and does not talk to the FastAPI backend. `mobile/README.md` (Korean) has the mock-vs-real table, the replacement points, the mapping to the backend API and the verification record, so keep it in sync when behaviour changes. UI copy and comments are Korean.
 
 ```bash
 cd mobile
 npm install
-npm run web              # web preview on :8081 (fastest way to look at UI changes)
+npm run web              # web preview on :8081, use a phone-sized window (fastest way to look at UI changes)
 npm start                # Expo dev server (Expo Go / simulators)
 npm run typecheck        # tsc --noEmit
 npm test                 # jest-expo, pure-logic suites under src/**/__tests__
@@ -69,17 +69,18 @@ npx expo install <pkg>   # add dependencies at the SDK-compatible version
 
 Run `npm run typecheck` and `npm test` after changes. Expo SDK 57 / RN 0.86 / React 19 APIs may differ from older docs, so check the installed package or the SDK 57 docs before using an API from memory.
 
-**Layers** (`mobile/src`): `domain/` (pure logic and types: burden, recommendation policy, preferences, learning) → `services/types.ts` (interfaces the screens depend on) → `mock/` (demo implementations) → `state/` (zustand stores) → `screens/`, `ui/`. `services/index.ts::createDemoServices` is the single composition point for swapping in real implementations; `map/index.ts` is the single point for swapping the map renderer (props contract in `map/MapAdapter.ts`).
+**Layers** (`mobile/src`): `domain/` (pure logic and types: burden, recommendation policy, preferences, learning) → `services/types.ts` (interfaces the screens depend on) → `mock/` (demo implementations) → `state/` (zustand stores) → `screens/`, `ui/`. Visual style comes from `design/tokens.ts` (Toss-like: gray page, white cards, big bold headings, soft-colour badges, 56px buttons); build screens from the shared components in `ui/` and make every tappable thing a `PressableScale` (press feedback) instead of a bare `Pressable`. `services/index.ts::createDemoServices` is the single composition point for swapping in real implementations; `map/index.ts` is the single point for swapping the map renderer (props contract in `map/MapAdapter.ts`).
 
 Invariants that are easy to break:
 - **Road characteristics and recommendations are separate.** `RouteProvider` returns only candidates and per-factor measurements; ranking, reasons and trade-offs come from `RecommendationService`. A recommendation carries the preference `signature` it was computed with, and `tripStore` discards stale responses (new search, changed settings). Never show routes or reasons from before a search or settings change.
 - **Every measurement is `known` / `partial` / `unknown`** (with source and verification). "0회" and "정보 없음" are different, and missing accident-zone data must never read as safe. Mock values are labelled as such.
 - **Turn factors are counted exclusively.** `TURN_COUNT` is the total; `UNPROTECTED_LEFT` and `U_TURN` are subsets; burden scoring uses plain turns = total − subsets. `SHARP_TURN` means a road-curve section, `MERGE_DIVERGE` and `LANE_CHANGE` are separate. This differs from the backend's `SHARP_TURN`/`LANE_CHANGE_TRAFFIC` (see the mapping table in `mobile/README.md`).
 - **Preference priority:** user-set value > mock-learned adjustment (only with consent, only for factors the user did not set) > default. Never silently relax a hard condition; explain it and let the user change it.
-- **Copy rules:** never claim safety ("안전", "사고 없는 길"); show 낮음/보통/높음 plus concrete reasons, never a safety score; the driving screen always shows 시뮬레이션 · 실제 주행에 사용하지 마세요.
+- **Copy rules:** never claim safety ("안전", "사고 없는 길"); show 낮음/보통/높음 plus concrete reasons, never a safety score. Everyday screens use product wording (주행, 경로, 기록) and carry no "데모" badges, but the data is fake, so keep the **disclosure points** listed in `mobile/README.md` §9: the welcome footnote, the "시연용 안내예요" sheet the first time guidance starts in a session (the simulator waits until it is acknowledged), the always-visible "시연 중 · 실제 도로 안내가 아니에요" pill on the guidance screen, the tiny "시연용 지도" map label, the search footnote, and Settings → 앱 정보 → 시연 안내. Do not remove them.
+- **Dev tools are hidden:** Settings → 앱 정보 → tap the version row 7 times (per session) to reveal 개발용 시나리오. The QA flows rely on this and on `testID`s, so keep both stable.
 - The demo city is deterministic: `mock/demoCity` builds routes from a directed road graph in one pass, so steps, factors, time and distance agree by construction (`route-consistency.test.ts` guards this). Change `cityData.ts` and re-run the scenario tests; the expected winners are in `mock/presets.ts`.
 - Storage keys all start with `newbiemap:v1:` (`services/repository`); "delete all" must clear every one of them. Nothing leaves the device and no sensitive values are logged.
 
-**React Native Web pitfalls** (the web preview is the main way UI is checked here): RN-web ignores `accessibilityState`, so mirror state with `aria-checked` / `aria-disabled`; put `pointerEvents` in `style`, not as a prop; Korean text wraps per syllable unless `wordBreak: keep-all`; SVG `onPress` is unsupported, so hit-test with a `Pressable` overlay. UI state can be driven by `testID` (rendered as `data-testid`).
+**React Native Web pitfalls** (the web preview is the main way UI is checked here): RN-web ignores `accessibilityState`, so mirror state with `aria-checked` / `aria-disabled`; put `pointerEvents` in `style`, not as a prop; Korean text wraps per syllable unless `wordBreak: keep-all`; SVG `onPress` is unsupported, so hit-test with a `Pressable` overlay; a `TextInput` needs `minWidth: 0` inside a flex row or it overflows the screen at large font scales; `Switch` needs the web-only `activeThumbColor`. UI state can be driven by `testID` (rendered as `data-testid`). The map draws decor (alleys, buildings) inside one `<G transform="matrix(...)">` per visible tile so panning does not rebuild path strings; keep it that way.
 
-The web preview is not device verification. Native bundling was checked with `npx expo export`, but nothing has been run on iOS/Android devices or emulators.
+Check layouts at 390×844 and 360×640, at font scales 1.6× and 2× (Settings dev tools), not only at the default size. The web preview is not device verification. Native bundling was checked with `npx expo export`, but nothing has been run on iOS/Android devices or emulators.

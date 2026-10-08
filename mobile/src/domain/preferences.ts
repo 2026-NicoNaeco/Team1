@@ -122,6 +122,6 @@ export function describeFactorSetting(
   if (source === 'user') {
     return { text: PRIORITY_LABEL[profile.priorities[code] ?? 'normal'], source };
   }
-  if (source === 'learned') return { text: '자동 · 피드백 반영 중(모의)', source };
+  if (source === 'learned') return { text: '자동 · 평가 반영 중', source };
   return { text: '자동 · 보통', source };
 }

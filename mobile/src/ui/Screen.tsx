@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, layout, space } from '../design/tokens';
+import { colors, layout, shadow, space } from '../design/tokens';
 import { IconButton } from './IconButton';
 import { Text } from './Text';
 
@@ -38,17 +38,17 @@ export function ScreenHeader({ title, subtitle, onBack, backLabel = '뒤로 가�
   return (
     <View style={[styles.header, large && styles.headerLarge]}>
       {!large || onBack || right ? (
-      <View style={styles.headerRow}>
-        {onBack ? <IconButton icon="back" label={backLabel} onPress={onBack} style={styles.back} /> : null}
-        {!large ? (
-          <Text variant="heading" style={styles.title} numberOfLines={2} accessibilityRole="header">
-            {title}
-          </Text>
-        ) : (
-          <View style={styles.title} />
-        )}
-        {right}
-      </View>
+        <View style={styles.headerRow}>
+          {onBack ? <IconButton icon="back" label={backLabel} onPress={onBack} style={styles.back} /> : null}
+          {!large ? (
+            <Text variant="heading" style={styles.title} numberOfLines={2} accessibilityRole="header">
+              {title}
+            </Text>
+          ) : (
+            <View style={styles.title} />
+          )}
+          {right}
+        </View>
       ) : null}
       {large ? (
         <Text variant="title1" accessibilityRole="header">
@@ -68,21 +68,19 @@ export function ScreenHeader({ title, subtitle, onBack, backLabel = '뒤로 가�
 export function ActionBar({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, space.md) }, style]}>{children}</View>
+    <View style={[styles.actionBar, shadow.bar, { paddingBottom: Math.max(insets.bottom, space.md) }, style]}>{children}</View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { paddingHorizontal: layout.screenX - 8, paddingBottom: space.sm, gap: space.xs },
-  headerLarge: { paddingHorizontal: layout.screenX, paddingTop: space.md },
+  headerLarge: { paddingHorizontal: layout.screenX, paddingTop: space.lg, paddingBottom: space.md },
   headerRow: { flexDirection: 'row', alignItems: 'center', minHeight: layout.minTouch },
   back: { marginRight: space.xs },
   title: { flex: 1 },
   actionBar: {
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     paddingTop: space.md,
     paddingHorizontal: layout.screenX,
     gap: space.sm,

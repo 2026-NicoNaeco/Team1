@@ -13,6 +13,7 @@ import { MemoryRepository } from '../../services/repository/MemoryRepository';
 import { resetAppStoreForTests, useAppStore } from '../appStore';
 import { clock } from '../clock';
 import { initTripSync, useTripStore } from '../tripStore';
+import { useUiStore } from '../uiStore';
 
 const place = (id: string) => PLACES.find((p) => p.id === id)!;
 const memory = new MemoryRepository();
@@ -375,5 +376,18 @@ describe('경로 상태: 설정이 바뀌면 추천을 다시 계산한다', () 
     await flush();
     expect(useTripStore.getState().recommendation).toBeNull();
     expect(useTripStore.getState().status).toBe('idle');
+  });
+});
+
+describe('화면 상태: 시연 안내와 개발용 도구', () => {
+  it('시연 안내 확인과 개발용 도구는 처음에는 꺼져 있고, 켜면 이번 실행 동안 유지된다', () => {
+    const initial = useUiStore.getState();
+    expect(initial.demoNoticeAcknowledged).toBe(false);
+    expect(initial.devToolsUnlocked).toBe(false);
+    useUiStore.getState().acknowledgeDemoNotice();
+    useUiStore.getState().unlockDevTools();
+    expect(useUiStore.getState().demoNoticeAcknowledged).toBe(true);
+    expect(useUiStore.getState().devToolsUnlocked).toBe(true);
+    useUiStore.setState({ demoNoticeAcknowledged: false, devToolsUnlocked: false });
   });
 });

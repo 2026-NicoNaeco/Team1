@@ -1,7 +1,9 @@
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, space } from '../design/tokens';
 import { Icon, type IconName } from './Icon';
+import { PressableScale } from './PressableScale';
 import { Text } from './Text';
+import { haptics } from './haptics';
 
 interface SelectCardProps {
   title: string;
@@ -21,26 +23,26 @@ interface SelectCardProps {
  */
 export function SelectCard({ title, description, selected, onPress, mode = 'single', leadingIcon, style, testID }: SelectCardProps) {
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole={mode === 'single' ? 'radio' : 'checkbox'}
       accessibilityLabel={description ? `${title} ${description}` : title}
       aria-checked={selected}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        selected ? styles.selected : styles.idle,
-        pressed && !selected && styles.pressed,
-        style,
-      ]}
+      onPress={() => {
+        haptics.selection();
+        onPress();
+      }}
+      pressedScale={0.98}
+      style={style}
+      contentStyle={({ pressed }) => [styles.card, selected ? styles.selected : pressed ? styles.pressed : styles.idle]}
     >
       {leadingIcon ? (
         <View style={[styles.leading, selected && styles.leadingSelected]}>
-          <Icon name={leadingIcon} size={22} color={selected ? colors.primary : colors.textSecondary} />
+          <Icon name={leadingIcon} size={22} color={selected ? colors.onPrimary : colors.primaryStrong} />
         </View>
       ) : null}
       <View style={styles.text}>
-        <Text variant="bodyStrong">{title}</Text>
+        <Text variant="lead">{title}</Text>
         {description ? (
           <Text variant="caption" color={colors.textSecondary}>
             {description}
@@ -54,9 +56,9 @@ export function SelectCard({ title, description, selected, onPress, mode = 'sing
           selected ? styles.indicatorOn : styles.indicatorOff,
         ]}
       >
-        {selected ? <Icon name="check" size={16} color={colors.onPrimary} strokeWidth={3} /> : null}
+        {selected ? <Icon name="check" size={16} color={colors.onPrimary} strokeWidth={3.2} /> : null}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -65,29 +67,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    minHeight: 64,
-    paddingVertical: space.md,
-    paddingHorizontal: space.lg,
+    minHeight: 68,
+    paddingVertical: space.lg,
+    paddingHorizontal: space.lg + 4,
     borderRadius: radius.card,
-    borderWidth: 1.5,
+    // 선택해도 크기가 흔들리지 않도록 테두리 두께를 항상 같게 둔다
+    borderWidth: 2,
   },
-  idle: { backgroundColor: colors.surface, borderColor: colors.border },
-  selected: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  pressed: { backgroundColor: colors.surfaceMuted },
+  idle: { backgroundColor: colors.surface, borderColor: colors.surface },
+  pressed: { backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceMuted },
+  selected: { backgroundColor: colors.primarySofter, borderColor: colors.primary },
   leading: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.control,
-    backgroundColor: colors.surfaceMuted,
+    width: 44,
+    height: 44,
+    borderRadius: radius.round,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  leadingSelected: { backgroundColor: colors.surface },
+  leadingSelected: { backgroundColor: colors.primary },
   text: { flex: 1, gap: 2 },
-  indicator: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  indicator: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   round: { borderRadius: radius.round },
-  square: { borderRadius: 7 },
+  square: { borderRadius: 8 },
   indicatorOff: { borderColor: colors.borderStrong, backgroundColor: colors.surface },
   indicatorOn: { borderColor: colors.primary, backgroundColor: colors.primary },
 });
-

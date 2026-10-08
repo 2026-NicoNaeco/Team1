@@ -15,9 +15,10 @@ import type {
 import { colors, layout, radius, space } from '../design/tokens';
 import type { RootScreenProps } from '../navigation/types';
 import { useTripStore } from '../state/tripStore';
-import { DemoBadge, LetterBadge, RecommendBadge, SelectedMark } from '../ui/Badges';
+import { LetterBadge, RecommendBadge, StatusPill } from '../ui/Badges';
 import { BurdenMeter } from '../ui/BurdenMeter';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { FactorTag } from '../ui/FactorTag';
 import { Icon, type IconName } from '../ui/Icon';
 import { ManeuverIcon } from '../ui/ManeuverIcon';
@@ -28,14 +29,14 @@ import { Text } from '../ui/Text';
 
 const SOURCE_LABEL: Record<WeightSource, string> = {
   user: '직접 설정',
-  learned: '피드백 반영(모의)',
+  learned: '평가 반영',
   default: '기본 설정',
 };
 
 const VERIFICATION_LABEL: Record<Verification, string> = {
   confirmed: '확인됨',
   estimated: '추정값',
-  unverified: '검증되지 않음 (데모 값)',
+  unverified: '검증되지 않은 값',
 };
 
 const TRADEOFF_ICON: Record<TradeoffKind, IconName> = {
@@ -60,17 +61,19 @@ const GROUPS: FactorGroup[] = ['turn', 'lane', 'road', 'surroundings'];
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <View style={styles.section}>
-      <Text variant="heading" accessibilityRole="header">
-        {title}
-      </Text>
-      {hint ? (
-        <Text variant="caption" color={colors.textSecondary}>
-          {hint}
+    <Card style={styles.section}>
+      <View style={styles.sectionHead}>
+        <Text variant="heading" accessibilityRole="header">
+          {title}
         </Text>
-      ) : null}
+        {hint ? (
+          <Text variant="caption" color={colors.textSecondary}>
+            {hint}
+          </Text>
+        ) : null}
+      </View>
       {children}
-    </View>
+    </Card>
   );
 }
 
@@ -98,7 +101,7 @@ function Timeline({ route }: { route: RouteCandidate }) {
           <View key={step.index} style={styles.stepRow}>
             <View style={styles.stepRail}>
               <View style={styles.stepIcon}>
-                <ManeuverIcon maneuver={step.maneuver} size={26} color={colors.text} strokeWidth={5.5} />
+                <ManeuverIcon maneuver={step.maneuver} size={24} color={colors.primaryStrong} strokeWidth={5.5} />
               </View>
               {!last ? <View style={styles.stepLine} /> : null}
             </View>
@@ -110,7 +113,7 @@ function Timeline({ route }: { route: RouteCandidate }) {
                 </Text>
               ) : null}
               {tags.length > 0 ? (
-                <Text variant="caption" color={colors.textSecondary}>
+                <Text variant="caption" color={colors.textTertiary}>
                   {tags.join(' · ')}
                 </Text>
               ) : null}
@@ -121,8 +124,8 @@ function Timeline({ route }: { route: RouteCandidate }) {
       {steps.length > 4 ? (
         <Button
           title={expanded ? '구간 접기' : `전체 ${steps.length}개 구간 보기`}
-          variant="tertiary"
-          fullWidth={false}
+          variant="secondary"
+          size="medium"
           onPress={() => setExpanded((v) => !v)}
         />
       ) : null}
@@ -155,7 +158,7 @@ function SourceTable({ route }: { route: RouteCandidate }) {
 
 /**
  * 경로 상세: 핵심 특징을 먼저 요약하고, 세부 요소·출처·구간은 단계적으로 펼쳐 본다.
- * "이 경로로 시뮬레이션 시작"은 이 화면에서만 할 수 있다 (카드를 눌렀다고 바로 시작하지 않는다).
+ * 안내 시작은 이 화면에서도 할 수 있다 (카드를 눌렀다고 바로 시작하지는 않는다).
  */
 export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenProps<'RouteDetail'>) {
   const { routeId } = navRoute.params;
@@ -201,11 +204,11 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
 
   return (
     <Screen>
-      <ScreenHeader title={`${candidate.label} 경로 상세`} onBack={() => navigation.goBack()} right={<DemoBadge />} />
+      <ScreenHeader title={`${candidate.label} 경로`} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} testID="detail-scroll">
-        <View style={styles.hero}>
+        <Card style={styles.hero}>
           <View style={styles.heroTitle}>
-            <LetterBadge letter={candidate.label} selected={selectedRouteId === candidate.id} size={36} />
+            <LetterBadge letter={candidate.label} selected={selectedRouteId === candidate.id} size={40} />
             <View style={styles.heroText}>
               <Text variant="title2">{ranked.headline}</Text>
               <Text variant="caption" color={colors.textSecondary}>
@@ -213,20 +216,15 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
               </Text>
             </View>
           </View>
-          <View style={styles.badges}>
-            {ranked.isRecommended ? <RecommendBadge /> : null}
-            {selectedRouteId === candidate.id ? <SelectedMark /> : null}
-            {!ranked.withinTimeLimit ? (
-              <View style={styles.overLimit}>
-                <Text variant="captionStrong" color={colors.caution}>
-                  허용 시간 초과
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          {ranked.isRecommended || !ranked.withinTimeLimit ? (
+            <View style={styles.badges}>
+              {ranked.isRecommended ? <RecommendBadge /> : null}
+              {!ranked.withinTimeLimit ? <StatusPill label="허용 시간 초과" tone="caution" /> : null}
+            </View>
+          ) : null}
           <View style={styles.metrics}>
             <Text variant="metric">{formatMinutes(ranked.durationMinutes)}</Text>
-            <Text variant="bodyStrong" color={ranked.extraMinutes > 0 ? colors.text : colors.primary}>
+            <Text variant="bodyStrong" color={ranked.extraMinutes > 0 ? colors.textSecondary : colors.primaryStrong}>
               {formatExtra(ranked.extraMinutes)}
             </Text>
           </View>
@@ -245,19 +243,19 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
               text={`지금 설정의 맞춤 추천은 ${recommendedRoute.label} 경로예요. 이 경로를 고른 선택은 그대로 유지돼요.`}
             />
           ) : null}
-        </View>
+        </Card>
 
         <Section title={ranked.isRecommended ? '이 경로를 추천한 이유' : '이 경로의 특징'}>
           {ranked.reasons.map((reason) => (
             <View key={reason.id} style={styles.reason}>
               <View style={styles.reasonRow}>
-                <Icon name="check" size={20} color={colors.primary} strokeWidth={3} />
+                <Icon name="check" size={18} color={colors.primary} strokeWidth={3.2} />
                 <Text variant="body" style={styles.flex}>
                   {reason.text}
                 </Text>
               </View>
               {reason.relatesTo ? (
-                <Text variant="caption" color={colors.textSecondary} style={styles.relates}>
+                <Text variant="caption" color={colors.textTertiary} style={styles.relates}>
                   연결된 설정: {reason.relatesTo.label} ({SOURCE_LABEL[reason.relatesTo.source]})
                 </Text>
               ) : null}
@@ -282,7 +280,7 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
               <Text variant="body" color={colors.textSecondary}>
                 아직 &apos;되도록 피하고 싶은&apos; 요소가 없어요. 설정에서 정하면 이 경로가 얼마나 맞는지 여기서 비교해 드려요.
               </Text>
-              <Button title="운전 성향 설정하기" variant="secondary" fullWidth={false} onPress={() => navigation.navigate('Preferences')} />
+              <Button title="운전 성향 설정하기" variant="secondary" size="medium" fullWidth={false} onPress={() => navigation.navigate('Preferences')} />
             </View>
           ) : (
             ranked.settingsRelation.map((row) => (
@@ -291,9 +289,7 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
                   <Text variant="bodyStrong" style={styles.flex}>
                     {row.label}
                   </Text>
-                  <Text variant="caption" color={colors.textSecondary}>
-                    {SOURCE_LABEL[row.source]}
-                  </Text>
+                  <StatusPill label={SOURCE_LABEL[row.source]} tone={row.source === 'user' ? 'primary' : 'neutral'} />
                 </View>
                 <Text variant="caption" color={colors.textSecondary}>
                   이 경로: {row.routeValueText} · {STANDING_TEXT[row.standing]}
@@ -319,6 +315,7 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
           <Button
             title={showSources ? '데이터 출처 접기' : '데이터 출처와 확인 상태 보기'}
             variant="tertiary"
+            size="medium"
             fullWidth={false}
             onPress={() => setShowSources((v) => !v)}
           />
@@ -331,43 +328,26 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
       </ScrollView>
 
       <ActionBar>
-        <Button testID="detail-start" title="이 경로로 시뮬레이션 시작" icon="play" onPress={start} />
-        <Text variant="caption" color={colors.textSecondary} align="center">
-          시뮬레이션이에요. 실제 주행이 아니며 위치 권한도 필요 없어요.
-        </Text>
+        <Button testID="detail-start" title="이 길로 안내 시작" icon="navigation" onPress={start} />
       </ActionBar>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: layout.screenX, paddingBottom: space.xl, gap: space.xl },
+  content: { paddingHorizontal: layout.screenX, paddingBottom: space.xl, gap: space.md },
   flex: { flex: 1 },
   gap: { gap: space.md },
-  hero: {
-    gap: space.sm,
-    padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  hero: { gap: space.md },
   heroTitle: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   heroText: { flex: 1, gap: 2 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, alignItems: 'center' },
-  overLimit: {
-    paddingHorizontal: space.sm,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: colors.cautionBg,
-    borderWidth: 1,
-    borderColor: colors.cautionBorder,
-  },
   metrics: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: space.md },
-  section: { gap: space.md },
+  section: { gap: space.lg },
+  sectionHead: { gap: space.xs },
   reason: { gap: 2 },
   reasonRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  relates: { marginLeft: 28 },
+  relates: { marginLeft: 26 },
   tradeoff: {
     flexDirection: 'row',
     gap: space.sm,
@@ -378,23 +358,15 @@ const styles = StyleSheet.create({
   },
   tradeoffCaution: { backgroundColor: colors.cautionBg },
   tradeoffUnknown: { backgroundColor: colors.surface, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.borderStrong },
-  relation: {
-    gap: 2,
-    padding: space.md,
-    borderRadius: radius.control,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  relation: { gap: space.xs, padding: space.md, borderRadius: radius.control, backgroundColor: colors.surfaceMuted },
   relationHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   group: { gap: space.sm },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  sourceTable: { gap: space.sm, padding: space.md, borderRadius: radius.control, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  sourceTable: { gap: space.md, padding: space.md, borderRadius: radius.control, backgroundColor: colors.surfaceMuted },
   sourceRow: { gap: 2 },
   stepRow: { flexDirection: 'row', gap: space.md },
   stepRail: { alignItems: 'center', width: 40 },
-  stepIcon: { width: 40, height: 40, borderRadius: radius.control, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
+  stepIcon: { width: 40, height: 40, borderRadius: radius.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   stepLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
   stepBody: { flex: 1, gap: 2, paddingBottom: space.lg },
 });
-

@@ -21,6 +21,9 @@ import Columns3 from 'lucide-react-native/icons/columns-3';
 import CornerUpLeft from 'lucide-react-native/icons/corner-up-left';
 import CornerUpRight from 'lucide-react-native/icons/corner-up-right';
 import Flag from 'lucide-react-native/icons/flag';
+import FaceNeutral from 'lucide-react-native/icons/face-neutral';
+import FaceSlightlyFrowning from 'lucide-react-native/icons/face-slightly-frowning';
+import FaceSlightlySmiling from 'lucide-react-native/icons/face-slightly-smiling';
 import Gauge from 'lucide-react-native/icons/gauge';
 import Info from 'lucide-react-native/icons/info';
 import LocateFixed from 'lucide-react-native/icons/locate-fixed';
@@ -42,6 +45,7 @@ import Settings from 'lucide-react-native/icons/settings';
 import Signpost from 'lucide-react-native/icons/signpost';
 import SlidersHorizontal from 'lucide-react-native/icons/sliders-horizontal';
 import Spline from 'lucide-react-native/icons/spline';
+import Sparkles from 'lucide-react-native/icons/sparkles';
 import Split from 'lucide-react-native/icons/split';
 import Square from 'lucide-react-native/icons/square';
 import Trash from 'lucide-react-native/icons/trash';
@@ -103,6 +107,10 @@ const LUCIDE = {
   lanes: Columns3,
   'lane-change': ArrowRightLeft,
   highway: Road,
+  smile: FaceSlightlySmiling,
+  meh: FaceNeutral,
+  frown: FaceSlightlyFrowning,
+  sparkles: Sparkles,
 } as const satisfies Record<string, LucideIcon>;
 
 type CustomName = 'traffic-light' | 'roundabout';

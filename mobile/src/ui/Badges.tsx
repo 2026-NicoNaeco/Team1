@@ -8,9 +8,9 @@ export function LetterBadge({ letter, selected = false, size = 32 }: { letter: s
   return (
     <View
       aria-hidden
-      style={[styles.letter, { width: size, height: size }, selected ? styles.letterOn : styles.letterOff]}
+      style={[styles.letter, { width: size, height: size, borderRadius: Math.round(size * 0.32) }, selected ? styles.letterOn : styles.letterOff]}
     >
-      <Text variant="bodyStrong" color={colors.onPrimary}>
+      <Text variant="bodyStrong" color={selected ? colors.onPrimary : colors.textSecondary}>
         {letter}
       </Text>
     </View>
@@ -21,30 +21,36 @@ export function LetterBadge({ letter, selected = false, size = 32 }: { letter: s
 export function RecommendBadge() {
   return (
     <View style={styles.recommend}>
-      <Text variant="captionStrong" color={colors.primary}>
+      <Icon name="check-circle" size={13} color={colors.primaryStrong} />
+      <Text variant="micro" color={colors.primaryStrong}>
         맞춤 추천
       </Text>
     </View>
   );
 }
 
-/** 지금 선택한 경로 표시: 체크 + 글자 */
+/** 지금 선택한 경로 표시: 체크 동그라미. 글자 설명은 부모의 접근성 라벨이 맡는다. */
 export function SelectedMark() {
   return (
-    <View style={styles.selected}>
-      <Icon name="check" size={14} color={colors.onPrimary} strokeWidth={3} />
-      <Text variant="captionStrong" color={colors.onPrimary}>
-        선택됨
-      </Text>
+    <View style={styles.selected} aria-hidden>
+      <Icon name="check" size={16} color={colors.onPrimary} strokeWidth={3.2} />
     </View>
   );
 }
 
-/** 데모·시뮬레이션 표시 */
-export function DemoBadge({ label = '데모 데이터' }: { label?: string }) {
+type PillTone = 'neutral' | 'caution' | 'primary';
+
+const PILL: Record<PillTone, { bg: string; fg: string }> = {
+  neutral: { bg: colors.surfaceStrong, fg: colors.textSecondary },
+  caution: { bg: colors.cautionBg, fg: colors.caution },
+  primary: { bg: colors.primarySoft, fg: colors.primaryStrong },
+};
+
+/** 짧은 상태 표시 알약 (예: 허용 시간 초과) */
+export function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: PillTone }) {
   return (
-    <View style={styles.demo}>
-      <Text variant="micro" color={colors.textSecondary}>
+    <View style={[styles.pill, { backgroundColor: PILL[tone].bg }]}>
+      <Text variant="micro" color={PILL[tone].fg}>
         {label}
       </Text>
     </View>
@@ -52,31 +58,31 @@ export function DemoBadge({ label = '데모 데이터' }: { label?: string }) {
 }
 
 const styles = StyleSheet.create({
-  letter: { borderRadius: radius.control - 2, alignItems: 'center', justifyContent: 'center' },
+  letter: { alignItems: 'center', justifyContent: 'center' },
   letterOn: { backgroundColor: colors.primary },
-  letterOff: { backgroundColor: '#3B4A54' },
+  letterOff: { backgroundColor: colors.surfaceStrong },
   recommend: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: space.sm,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  selected: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: space.sm,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
+    alignSelf: 'flex-start',
+    paddingHorizontal: space.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.round,
+    backgroundColor: colors.primarySoft,
   },
-  demo: {
-    paddingHorizontal: space.sm,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceMuted,
+  selected: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.round,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: space.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.round,
   },
 });

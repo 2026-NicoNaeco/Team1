@@ -1,13 +1,14 @@
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, layout, radius, shadow } from '../design/tokens';
 import { Icon, type IconName } from './Icon';
+import { PressableScale } from './PressableScale';
 
 interface IconButtonProps {
   icon: IconName;
   /** 아이콘만 있는 버튼이므로 동작을 설명하는 라벨이 반드시 필요하다 */
   label: string;
   onPress: () => void;
-  /** floating: 지도 위에 떠 있는 흰 버튼 / filled: 약한 면 / plain: 배경 없음 */
+  /** floating: 지도 위에 떠 있는 흰 버튼 / filled: 회색 면 / plain: 배경 없음 */
   variant?: 'floating' | 'filled' | 'plain';
   size?: number;
   iconColor?: string;
@@ -28,32 +29,35 @@ export function IconButton({
   testID,
 }: IconButtonProps) {
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
       aria-disabled={disabled}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      pressedScale={0.92}
+      style={[{ width: size, height: size }, style]}
+      contentStyle={({ pressed }) => [
         styles.base,
-        { width: size, height: size },
+        { width: size, height: size, borderRadius: radius.round },
         variant === 'floating' && [styles.floating, shadow.floating],
         variant === 'filled' && styles.filled,
-        pressed && styles.pressed,
+        pressed && (variant === 'plain' ? styles.plainPressed : variant === 'filled' ? styles.filledPressed : styles.floatingPressed),
         disabled && styles.disabled,
-        style,
       ]}
     >
       <Icon name={icon} size={24} color={disabled ? colors.textDisabled : iconColor} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.button },
+  base: { alignItems: 'center', justifyContent: 'center' },
   floating: { backgroundColor: colors.surface },
-  filled: { backgroundColor: colors.surfaceMuted },
-  pressed: { backgroundColor: colors.surfaceMuted },
-  disabled: { opacity: 0.6 },
+  filled: { backgroundColor: colors.surfaceStrong },
+  plainPressed: { backgroundColor: 'rgba(25, 31, 40, 0.07)' },
+  filledPressed: { backgroundColor: '#D8DCE0' },
+  floatingPressed: { backgroundColor: colors.surfaceMuted },
+  disabled: { opacity: 0.55 },
 });

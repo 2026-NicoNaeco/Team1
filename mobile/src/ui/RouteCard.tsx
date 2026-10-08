@@ -1,11 +1,13 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { formatDistance, formatExtra, formatMinutes, formatWon } from '../domain/format';
 import type { RankedRoute, RouteCandidate, TradeoffItem, TradeoffKind } from '../domain/types';
 import { colors, radius, space } from '../design/tokens';
-import { LetterBadge, RecommendBadge, SelectedMark } from './Badges';
+import { LetterBadge, RecommendBadge, SelectedMark, StatusPill } from './Badges';
 import { BurdenMeter } from './BurdenMeter';
 import { Icon, type IconName } from './Icon';
+import { PressableScale } from './PressableScale';
 import { Text } from './Text';
+import { haptics } from './haptics';
 
 interface RouteCardProps {
   route: RouteCandidate;
@@ -44,39 +46,41 @@ export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCar
   const summary = `${route.label} 경로 ${ranked.headline}. ${formatMinutes(ranked.durationMinutes)}, ${formatExtra(ranked.extraMinutes)}. 예상 운전 부담 ${
     { low: '낮음', medium: '보통', high: '높음' }[ranked.burdenLevel]
   }.${ranked.isRecommended ? ' 맞춤 추천.' : ''}${selected ? ' 현재 선택됨.' : ''}`;
+  const caution = tradeoff?.item.kind === 'over_limit';
+  const unknown = tradeoff?.item.kind === 'unknown_info';
 
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole="radio"
       accessibilityLabel={summary}
       aria-checked={selected}
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, selected ? styles.selected : styles.idle, pressed && !selected && styles.pressed]}
+      onPress={() => {
+        if (!selected) haptics.selection();
+        onPress();
+      }}
+      pressedScale={0.985}
+      contentStyle={({ pressed }) => [styles.card, selected ? styles.selected : pressed ? styles.pressed : styles.idle]}
     >
       <View style={styles.titleRow}>
         <LetterBadge letter={route.label} selected={selected} />
         <View style={styles.titleText}>
-          <Text variant="bodyStrong" numberOfLines={2}>
+          <Text variant="lead" numberOfLines={2}>
             {ranked.headline}
           </Text>
-          <View style={styles.badges}>
-            {ranked.isRecommended ? <RecommendBadge /> : null}
-            {!ranked.withinTimeLimit ? (
-              <View style={styles.overLimit}>
-                <Text variant="captionStrong" color={colors.caution}>
-                  허용 시간 초과
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          {ranked.isRecommended || !ranked.withinTimeLimit ? (
+            <View style={styles.badges}>
+              {ranked.isRecommended ? <RecommendBadge /> : null}
+              {!ranked.withinTimeLimit ? <StatusPill label="허용 시간 초과" tone="caution" /> : null}
+            </View>
+          ) : null}
         </View>
         {selected ? <SelectedMark /> : null}
       </View>
 
       <View style={styles.timeRow}>
         <Text variant="metric">{formatMinutes(ranked.durationMinutes)}</Text>
-        <Text variant="bodyStrong" color={ranked.extraMinutes > 0 ? colors.text : colors.primary} style={styles.extra}>
+        <Text variant="bodyStrong" color={ranked.extraMinutes > 0 ? colors.textSecondary : colors.primaryStrong} style={styles.extra}>
           {formatExtra(ranked.extraMinutes)}
         </Text>
       </View>
@@ -99,7 +103,7 @@ export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCar
         {ranked.reasons.map((reason) => (
           <View key={reason.id} style={styles.reasonRow}>
             <View style={styles.reasonIcon}>
-              <Icon name="check" size={18} color={colors.primary} strokeWidth={3} />
+              <Icon name="check" size={16} color={colors.primary} strokeWidth={3.2} />
             </View>
             <Text variant="body" style={styles.reasonText}>
               {reason.text}
@@ -113,10 +117,10 @@ export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCar
       </Text>
 
       {tradeoff ? (
-        <View style={[styles.tradeoff, tradeoff.item.kind === 'over_limit' ? styles.tradeoffCaution : tradeoff.item.kind === 'unknown_info' ? styles.tradeoffUnknown : styles.tradeoffNeutral]}>
-          <Icon name={TRADEOFF_ICON[tradeoff.item.kind]} size={18} color={tradeoff.item.kind === 'over_limit' ? colors.caution : colors.textSecondary} />
-          <Text variant="caption" color={tradeoff.item.kind === 'over_limit' ? colors.caution : colors.text} style={styles.tradeoffText}>
-            <Text variant="captionStrong" color={tradeoff.item.kind === 'over_limit' ? colors.caution : colors.text}>
+        <View style={[styles.tradeoff, caution ? styles.tradeoffCaution : unknown ? styles.tradeoffUnknown : styles.tradeoffNeutral]}>
+          <Icon name={TRADEOFF_ICON[tradeoff.item.kind]} size={18} color={caution ? colors.caution : colors.textSecondary} />
+          <Text variant="caption" color={caution ? colors.caution : colors.text} style={styles.tradeoffText}>
+            <Text variant="captionStrong" color={caution ? colors.caution : colors.text}>
               {tradeoff.item.kind === 'extra_time' || tradeoff.item.kind === 'toll' || tradeoff.item.kind === 'over_limit' ? '감수할 점  ' : '확인할 점  '}
             </Text>
             {tradeoff.item.text}
@@ -124,36 +128,28 @@ export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCar
           </Text>
         </View>
       ) : null}
-    </Pressable>
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: radius.card, borderWidth: 1.5, padding: space.lg, gap: space.md },
-  idle: { backgroundColor: colors.surface, borderColor: colors.border },
-  selected: { backgroundColor: colors.surface, borderColor: colors.primary, borderWidth: 2.5 },
-  pressed: { backgroundColor: colors.bg },
+  // 선택해도 크기가 흔들리지 않도록 테두리 두께를 항상 같게 둔다
+  card: { borderRadius: radius.card, borderWidth: 2, padding: space.xl - 4, gap: space.md },
+  idle: { backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceMuted },
+  pressed: { backgroundColor: colors.surfaceStrong, borderColor: colors.surfaceStrong },
+  selected: { backgroundColor: colors.primarySofter, borderColor: colors.primary },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  titleText: { flex: 1, gap: space.xs },
+  titleText: { flex: 1, gap: space.xs + 2 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  overLimit: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: space.sm,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: colors.cautionBg,
-    borderWidth: 1,
-    borderColor: colors.cautionBorder,
-  },
   timeRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: space.md },
   extra: { flexShrink: 1 },
-  burden: { gap: 2 },
+  burden: { gap: space.sm },
   reasons: { gap: space.xs + 2 },
   reasonRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  reasonIcon: { paddingTop: 3 },
+  reasonIcon: { paddingTop: 4 },
   reasonText: { flex: 1 },
   tradeoff: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', padding: space.md, borderRadius: radius.control },
-  tradeoffNeutral: { backgroundColor: colors.surfaceMuted },
+  tradeoffNeutral: { backgroundColor: colors.surface },
   tradeoffCaution: { backgroundColor: colors.cautionBg },
   tradeoffUnknown: { backgroundColor: colors.surface, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.borderStrong },
   tradeoffText: { flex: 1 },

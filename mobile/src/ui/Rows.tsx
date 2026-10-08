@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Switch, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Children, type ReactNode } from 'react';
+import { StyleSheet, Switch, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, layout, radius, space } from '../design/tokens';
 import { Icon, type IconName } from './Icon';
+import { PressableScale } from './PressableScale';
 import { Text } from './Text';
+import { haptics } from './haptics';
 
 interface ListRowProps {
   title: string;
@@ -29,16 +31,16 @@ export function ListRow({
   style,
   testID,
 }: ListRowProps) {
-  const color = destructive ? colors.danger : colors.text;
+  const color = destructive ? colors.dangerText : colors.text;
   const body = (
     <>
       {icon ? (
-        <View style={styles.icon}>
-          <Icon name={icon} size={22} color={destructive ? colors.danger : colors.textSecondary} />
+        <View style={[styles.icon, destructive ? styles.iconDanger : styles.iconNormal]}>
+          <Icon name={icon} size={20} color={destructive ? colors.dangerText : colors.primaryStrong} />
         </View>
       ) : null}
       <View style={styles.text}>
-        <Text variant="bodyStrong" color={color}>
+        <Text variant="lead" color={color}>
           {title}
         </Text>
         {subtitle ? (
@@ -52,7 +54,7 @@ export function ListRow({
           {value}
         </Text>
       ) : null}
-      {chevron ? <Icon name="chevron-right" size={20} color={colors.textSecondary} /> : null}
+      {chevron ? <Icon name="chevron-right" size={20} color={colors.textTertiary} /> : null}
     </>
   );
   if (!onPress) {
@@ -63,14 +65,16 @@ export function ListRow({
     );
   }
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed, style]}
+      pressedScale={0.99}
+      style={style}
+      contentStyle={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       {body}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -86,12 +90,12 @@ interface SwitchRowProps {
 // react-native-web 은 켜진 상태의 손잡이 색을 thumbColor 와 별개로 받는다(네이티브 타입에는 없는 웹 전용 속성)
 const WEB_SWITCH_PROPS = { activeThumbColor: '#FFFFFF' } as object;
 
-/** 켜짐/꺼짐을 스위치 모양과 글자로 함께 보여준다 */
+/** 켜짐/꺼짐은 스위치의 위치와 색, 접근성 상태로 함께 전달한다 */
 export function SwitchRow({ label, description, value, onValueChange, disabled, testID }: SwitchRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.text}>
-        <Text variant="bodyStrong" color={disabled ? colors.textDisabled : colors.text}>
+        <Text variant="lead" color={disabled ? colors.textDisabled : colors.text}>
           {label}
         </Text>
         {description ? (
@@ -100,32 +104,32 @@ export function SwitchRow({ label, description, value, onValueChange, disabled, 
           </Text>
         ) : null}
       </View>
-      <View style={styles.switchBox}>
-        <Switch
-          testID={testID}
-          value={value}
-          disabled={disabled}
-          onValueChange={onValueChange}
-          accessibilityLabel={label}
-          trackColor={{ false: '#9AA9B1', true: colors.primary }}
-          thumbColor="#FFFFFF"
-          {...WEB_SWITCH_PROPS}
-        />
-        <Text variant="micro" color={colors.textSecondary}>
-          {value ? '켜짐' : '꺼짐'}
-        </Text>
-      </View>
+      <Switch
+        testID={testID}
+        value={value}
+        disabled={disabled}
+        onValueChange={(next) => {
+          haptics.selection();
+          onValueChange(next);
+        }}
+        accessibilityLabel={label}
+        trackColor={{ false: '#B0B8C1', true: colors.primary }}
+        ios_backgroundColor="#B0B8C1"
+        thumbColor="#FFFFFF"
+        {...WEB_SWITCH_PROPS}
+      />
     </View>
   );
 }
 
 /** 구분선이 있는 카드형 묶음 */
 export function Group({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const items = (Array.isArray(children) ? children : [children]).filter(Boolean);
+  const items = Children.toArray(children).filter(Boolean);
   return (
     <View style={[styles.group, style]}>
       {items.map((child, i) => (
-        <View key={i} style={i > 0 ? styles.divider : undefined}>
+        <View key={i}>
+          {i > 0 ? <View style={styles.divider} /> : null}
           {child}
         </View>
       ))}
@@ -138,21 +142,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    minHeight: layout.minTouch + 8,
+    minHeight: 68,
     paddingVertical: space.md,
-    paddingHorizontal: space.lg,
+    paddingHorizontal: layout.cardPad,
+    backgroundColor: colors.surface,
   },
   pressed: { backgroundColor: colors.surfaceMuted },
-  icon: { width: 28, alignItems: 'center' },
+  icon: { width: 40, height: 40, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
+  iconNormal: { backgroundColor: colors.primarySoft },
+  iconDanger: { backgroundColor: colors.dangerBg },
   text: { flex: 1, gap: 2 },
   value: { flexShrink: 1, maxWidth: '45%' },
-  switchBox: { alignItems: 'center', gap: 2 },
   group: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
     overflow: 'hidden',
   },
-  divider: { borderTopWidth: 1, borderTopColor: colors.border },
+  divider: { height: 1, backgroundColor: colors.border, marginLeft: layout.cardPad },
 });

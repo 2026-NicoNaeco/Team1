@@ -167,6 +167,6 @@ const styles = StyleSheet.create({
   },
   dragArea: { backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
   handleHit: { alignItems: 'center', justifyContent: 'center', height: 24 },
-  handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
+  handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#CDD3D9" },
   body: { flex: 1 },
 });

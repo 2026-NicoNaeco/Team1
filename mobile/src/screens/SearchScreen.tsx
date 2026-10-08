@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatDistance } from '../domain/format';
 import { haversineM } from '../domain/geo';
 import type { Place } from '../domain/types';
-import { colors, layout, radius, space } from '../design/tokens';
+import { colors, layout, space } from '../design/tokens';
 import type { RootScreenProps } from '../navigation/types';
 import { getServices } from '../services';
 import { useAppStore } from '../state/appStore';
 import { useTripStore } from '../state/tripStore';
 import { CATEGORY_LABEL } from '../mock/places';
-import { DemoBadge } from '../ui/Badges';
-import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/IconButton';
+import { PlaceRow } from '../ui/PlaceRow';
 import { SearchInput } from '../ui/SearchField';
 import { SkeletonBlock, StateView } from '../ui/StateViews';
 import { Text } from '../ui/Text';
@@ -22,8 +21,8 @@ type SearchStatus = 'idle' | 'loading' | 'done' | 'error';
 const DEBOUNCE_MS = 250;
 
 /**
- * 장소 검색. 키보드가 열린 상태를 기준으로 결과 목록을 보여주고, 결과가 없으면 입력 수정이나 샘플 장소 선택으로 이어준다.
- * 샘플 장소 안에서만 찾으며 없는 장소를 만들어 내지 않는다.
+ * 장소 검색. 키보드가 열린 상태를 기준으로 결과 목록을 보여주고, 결과가 없으면 입력 수정이나 추천 장소 선택으로 이어준다.
+ * 가진 장소 안에서만 찾으며 없는 장소를 만들어 내지 않는다.
  */
 export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
   const mode = route.params.mode;
@@ -109,35 +108,32 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
     const blocked = place.id === blockedId;
     const distance = formatDistance(haversineM(origin.location, place.location));
     return (
-      <Pressable
+      <PlaceRow
         key={place.id}
         testID={`result-${place.id}`}
-        accessibilityRole="button"
-        aria-disabled={blocked}
-        accessibilityHint={blocked ? undefined : mode === 'destination' ? '누르면 이 장소로 가는 경로를 비교해요' : '누르면 출발지로 정해요'}
+        name={place.name}
+        address={place.address}
+        subtitle={
+          blocked
+            ? mode === 'destination'
+              ? '출발지와 같은 장소예요'
+              : '도착지와 같은 장소예요'
+            : `${CATEGORY_LABEL[place.category]} · 출발지에서 ${distance}`
+        }
         disabled={blocked}
+        accessibilityHint={mode === 'destination' ? '누르면 이 장소로 가는 경로를 비교해요' : '누르면 출발지로 정해요'}
         onPress={() => choose(place)}
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed, blocked && styles.rowBlocked]}
-      >
-        <View style={styles.rowIcon}>
-          <Icon name="pin" size={20} color={blocked ? colors.textDisabled : colors.primary} />
-        </View>
-        <View style={styles.rowText}>
-          <Text variant="bodyStrong" numberOfLines={2} color={blocked ? colors.textDisabled : colors.text}>
-            {place.name}
-          </Text>
-          <Text variant="caption" color={colors.textSecondary} numberOfLines={2}>
-            {place.address}
-          </Text>
-          <Text variant="caption" color={colors.textSecondary}>
-            {blocked ? (mode === 'destination' ? '출발지와 같은 장소예요' : '도착지와 같은 장소예요') : `${CATEGORY_LABEL[place.category]} · 출발지에서 ${distance}`}
-          </Text>
-        </View>
-      </Pressable>
+      />
     );
   };
 
   const trimmed = query.trim();
+  const note = (
+    <Text variant="caption" color={colors.textTertiary} align="center" style={styles.note}>
+      시연용이라 일부 장소만 검색돼요
+    </Text>
+  );
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -150,12 +146,6 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
           autoFocus
         />
       </View>
-      <View style={styles.context}>
-        <Text variant="captionStrong" color={colors.primary}>
-          {mode === 'destination' ? '도착지 검색' : '출발지 검색'}
-        </Text>
-        <DemoBadge label="샘플 장소만 검색돼요" />
-      </View>
 
       <FlatList
         data={[0]}
@@ -165,21 +155,22 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + space.xl }]}
         renderItem={() => (
-          <View>
+          <View style={styles.list}>
             {trimmed.length === 0 ? (
               <>
-                <Text variant="captionStrong" color={colors.textSecondary} style={styles.sectionTitle}>
-                  {mode === 'destination' && recents.length > 0 ? '최근 목적지와 샘플 장소' : '샘플 장소'}
+                <Text variant="heading" accessibilityRole="header" style={styles.sectionTitle}>
+                  {mode === 'destination' ? (recents.length > 0 ? '최근 목적지와 추천 장소' : '이런 곳은 어때요?') : '어디에서 출발할까요?'}
                 </Text>
                 {suggestions.map(renderRow)}
+                {note}
               </>
             ) : status === 'loading' ? (
               <View style={styles.loading} accessibilityRole="progressbar" accessibilityLabel="장소를 찾고 있어요">
                 <Text variant="caption" color={colors.textSecondary}>
-                  샘플 장소에서 찾고 있어요
+                  장소를 찾고 있어요
                 </Text>
-                <SkeletonBlock height={72} />
-                <SkeletonBlock height={72} />
+                <SkeletonBlock height={76} />
+                <SkeletonBlock height={76} />
               </View>
             ) : status === 'error' ? (
               <StateView
@@ -194,13 +185,14 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
                 <StateView
                   icon="search"
                   title="검색 결과가 없어요"
-                  message={`'${trimmed}'와 일치하는 데모 장소가 없어요. 철자를 확인하거나 아래 샘플 장소를 골라 보세요.`}
+                  message={`'${trimmed}'와 일치하는 장소가 없어요. 철자를 확인하거나 아래 추천 장소를 골라 보세요.`}
                   actions={[{ label: '검색어 지우기', variant: 'secondary', onPress: () => setQuery('') }]}
                 />
-                <Text variant="captionStrong" color={colors.textSecondary} style={styles.sectionTitle}>
-                  샘플 장소
+                <Text variant="heading" accessibilityRole="header" style={styles.sectionTitle}>
+                  추천 장소
                 </Text>
                 {suggestions.map(renderRow)}
+                {note}
               </>
             ) : (
               <>
@@ -208,6 +200,7 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
                   검색 결과 {results.length}개
                 </Text>
                 {results.map(renderRow)}
+                {note}
               </>
             )}
           </View>
@@ -219,38 +212,10 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: layout.screenX - 8, paddingTop: space.sm },
-  context: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: space.sm,
-    paddingHorizontal: layout.screenX,
-    paddingVertical: space.md,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: layout.screenX - 8, paddingTop: space.sm, paddingBottom: space.sm },
   listContent: { paddingHorizontal: layout.screenX },
-  sectionTitle: { marginTop: space.md, marginBottom: space.sm },
-  loading: { gap: space.sm, paddingTop: space.md },
-  row: {
-    flexDirection: 'row',
-    gap: space.md,
-    padding: space.md,
-    marginBottom: space.sm,
-    minHeight: 72,
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  rowPressed: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  rowBlocked: { backgroundColor: colors.surfaceMuted },
-  rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.control,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowText: { flex: 1, gap: 2 },
+  list: { gap: space.sm },
+  sectionTitle: { marginTop: space.lg, marginBottom: space.xs },
+  loading: { gap: space.sm, paddingTop: space.lg },
+  note: { marginTop: space.lg },
 });

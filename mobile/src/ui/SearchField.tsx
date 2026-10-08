@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, layout, radius, shadow, space, typography } from '../design/tokens';
 import { useUiStore } from '../state/uiStore';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
+import { PressableScale } from './PressableScale';
 import { Text } from './Text';
 
 /** 지도 위에 떠 있는 검색 버튼. 눌러서 검색 화면으로 이동한다. */
@@ -21,19 +22,21 @@ export function SearchButton({
   testID?: string;
 }) {
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={value ?? placeholder}
       accessibilityHint="누르면 목적지를 검색해요"
       onPress={onPress}
-      style={({ pressed }) => [styles.button, shadow.floating, pressed && styles.pressed, style]}
+      pressedScale={0.98}
+      style={style}
+      contentStyle={({ pressed }) => [styles.button, shadow.floating, pressed && styles.pressed]}
     >
-      <Icon name="search" size={22} color={colors.primary} />
-      <Text variant="bodyStrong" color={value ? colors.text : colors.textSecondary} style={styles.buttonText} numberOfLines={2}>
+      <Icon name="search" size={22} color={colors.primary} strokeWidth={2.4} />
+      <Text variant="lead" color={value ? colors.text : colors.textTertiary} style={styles.buttonText} numberOfLines={2}>
         {value ?? placeholder}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -52,13 +55,13 @@ export function SearchInput({ value, onChangeText, placeholder, autoFocus, onSub
   const devScale = useUiStore((s) => s.devFontScale);
   return (
     <View style={[styles.input, focused && styles.inputFocused]}>
-      <Icon name="search" size={22} color={focused ? colors.primary : colors.textSecondary} />
+      <Icon name="search" size={22} color={focused ? colors.primary : colors.textTertiary} />
       <TextInput
         testID={testID}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
+        placeholderTextColor={colors.textTertiary}
         autoFocus={autoFocus}
         autoCorrect={false}
         autoCapitalize="none"
@@ -68,9 +71,10 @@ export function SearchInput({ value, onChangeText, placeholder, autoFocus, onSub
         onBlur={() => setFocused(false)}
         accessibilityLabel={placeholder}
         maxFontSizeMultiplier={2}
+        selectionColor={colors.primary}
         style={[
           styles.textInput,
-          devScale === 1 ? null : { fontSize: (typography.body.fontSize ?? 16) * devScale },
+          devScale === 1 ? null : { fontSize: (typography.lead.fontSize ?? 17) * devScale },
         ]}
       />
       {value.length > 0 ? (
@@ -86,32 +90,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
     minHeight: 56,
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.xl - 2,
     paddingVertical: space.sm,
-    borderRadius: radius.card,
+    borderRadius: radius.round,
     backgroundColor: colors.surface,
   },
   pressed: { backgroundColor: colors.surfaceMuted },
   buttonText: { flex: 1 },
   input: {
     flex: 1,
+    // 큰 글자에서도 입력창이 화면 밖으로 밀려나지 않고 줄어들 수 있게 한다
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    minHeight: layout.minTouch + 4,
+    minHeight: 52,
     paddingLeft: space.lg,
     paddingRight: space.xs,
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.borderStrong,
+    borderRadius: radius.field,
+    backgroundColor: colors.surfaceStrong,
+    borderWidth: 2,
+    borderColor: colors.surfaceStrong,
   },
-  inputFocused: { borderColor: colors.primary, borderWidth: 2 },
+  inputFocused: { backgroundColor: colors.surface, borderColor: colors.primary },
   textInput: {
     flex: 1,
-    ...typography.body,
+    minWidth: 0,
+    ...typography.lead,
+    fontWeight: '500',
     color: colors.text,
     paddingVertical: space.sm,
+    minHeight: layout.minTouch,
     // 웹에서 기본 포커스 윤곽선 대신 컨테이너의 테두리로 포커스를 보여준다
     outlineStyle: 'none',
   } as never,

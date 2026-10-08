@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { FACTOR_ORDER, FACTORS } from '../domain/factors';
-import { RATING_LABEL, formatDateTime, formatDistance, formatMinutes, formatExtra, formatWon } from '../domain/format';
+import { RATING_LABEL, formatDateTime, formatDistance, formatMinutes, formatExtra, formatWon, placeLabel } from '../domain/format';
 import type { FactorCode, Measurement, RecordedFactor } from '../domain/types';
-import { colors, layout, radius, space } from '../design/tokens';
+import { colors, layout, space } from '../design/tokens';
 import type { RootScreenProps } from '../navigation/types';
 import { DEMO_SOURCE } from '../mock/demoCity/buildRoute';
 import { useAppStore } from '../state/appStore';
 import { useUiStore } from '../state/uiStore';
-import { DemoBadge, LetterBadge } from '../ui/Badges';
+import { LetterBadge } from '../ui/Badges';
 import { BurdenMeter } from '../ui/BurdenMeter';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { FactorTag } from '../ui/FactorTag';
 import { Notice } from '../ui/Notice';
 import { Screen, ScreenHeader } from '../ui/Screen';
@@ -29,7 +30,7 @@ function toMeasurement(code: FactorCode, f: RecordedFactor): Measurement {
   return { availability: 'known', value: f.value, unit, source: DEMO_SOURCE, verification: 'unverified' };
 }
 
-/** 시뮬레이션 기록 상세. 개별 기록을 삭제할 수 있다. */
+/** 주행 기록 상세. 개별 기록을 삭제할 수 있다. */
 export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'HistoryDetail'>) {
   const { recordId } = route.params;
   const record = useAppStore((s) => s.records.find((r) => r.id === recordId));
@@ -63,31 +64,34 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
 
   return (
     <Screen>
-      <ScreenHeader title="기록 상세" onBack={() => navigation.goBack()} right={<DemoBadge label="시뮬레이션 기록" />} />
+      <ScreenHeader title="기록 상세" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
+        <Card style={styles.gap}>
           <Text variant="caption" color={colors.textSecondary}>
             {formatDateTime(record.createdAt)}
           </Text>
           <Text variant="title2">{record.destination.name}</Text>
           <Text variant="caption" color={colors.textSecondary}>
-            출발 {record.origin.name}
+            출발 {placeLabel(record.origin.name)}
           </Text>
-        </View>
+        </Card>
 
-        <View style={styles.card}>
+        <Card style={styles.gap}>
           <View style={styles.routeRow}>
-            <LetterBadge letter={record.route.label} selected size={36} />
+            <LetterBadge letter={record.route.label} selected size={40} />
             <View style={styles.flex}>
-              <Text variant="bodyStrong">{record.route.headline}</Text>
+              <Text variant="lead">{record.route.headline}</Text>
               <Text variant="caption" color={colors.textSecondary}>
                 {record.route.via} 경유
               </Text>
             </View>
           </View>
-          <Text variant="body">
-            {formatMinutes(record.route.durationMinutes)} · {formatExtra(record.route.extraMinutes)}
-          </Text>
+          <View style={styles.metrics}>
+            <Text variant="metric">{formatMinutes(record.route.durationMinutes)}</Text>
+            <Text variant="bodyStrong" color={colors.textSecondary}>
+              {formatExtra(record.route.extraMinutes)}
+            </Text>
+          </View>
           <Text variant="caption" color={colors.textSecondary}>
             {formatDistance(record.route.distanceM)} · {toll}
           </Text>
@@ -96,15 +100,15 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
             {record.outcome === 'arrived' ? '끝까지 도착했어요.' : `중간에 끝냈어요 (${Math.round(record.progress * 100)}% 진행).`}{' '}
             {record.chosenWasRecommended ? '맞춤 추천 경로를 골랐어요.' : '맞춤 추천과 다른 경로를 골랐어요.'}
           </Text>
-        </View>
+        </Card>
 
-        <View style={styles.section}>
+        <Card style={styles.gap}>
           <Text variant="heading" accessibilityRole="header">
             내 평가
           </Text>
           {record.feedback ? (
             <>
-              <Text variant="bodyStrong">{RATING_LABEL[record.feedback.rating]}</Text>
+              <Text variant="lead">{RATING_LABEL[record.feedback.rating]}</Text>
               {record.feedback.factors.length > 0 ? (
                 <Text variant="body" color={colors.textSecondary}>
                   고른 요소: {record.feedback.factors.map((c) => FACTORS[c].label).join(', ')}
@@ -114,10 +118,8 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
                   고른 요소가 없어요.
                 </Text>
               )}
-              <Text variant="caption" color={colors.textSecondary}>
-                {record.feedback.appliedToRecommendations
-                  ? '이 평가를 추천에 반영했어요 (모의 규칙).'
-                  : '이 평가는 추천에 반영하지 않았어요.'}
+              <Text variant="caption" color={colors.textTertiary}>
+                {record.feedback.appliedToRecommendations ? '이 평가를 추천에 반영했어요.' : '이 평가는 추천에 반영하지 않았어요.'}
               </Text>
             </>
           ) : (
@@ -125,14 +127,14 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
               평가를 남기지 않았어요.
             </Text>
           )}
-        </View>
+        </Card>
 
-        <View style={styles.section}>
+        <Card style={styles.gap}>
           <Text variant="heading" accessibilityRole="header">
             그때의 운전 요소
           </Text>
           <Text variant="caption" color={colors.textSecondary}>
-            시뮬레이션 당시 데모 도로 정보예요. ‘없음’과 ‘정보 없음’은 서로 다른 뜻이에요.
+            ‘없음’과 ‘정보 없음’은 서로 다른 뜻이에요.
           </Text>
           <View style={styles.tags}>
             {(FACTOR_ORDER as FactorCode[])
@@ -141,7 +143,7 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
                 <FactorTag key={code} code={code} measurement={toMeasurement(code, record.route.factors[code]!)} />
               ))}
           </View>
-        </View>
+        </Card>
 
         {confirming ? (
           <Notice
@@ -152,11 +154,11 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
         ) : null}
         {confirming ? (
           <View style={styles.confirmRow}>
-            <Button title="취소" variant="secondary" style={styles.flex} onPress={() => setConfirming(false)} />
+            <Button title="취소" variant="neutral" style={styles.flex} onPress={() => setConfirming(false)} />
             <Button title="삭제" variant="danger" style={styles.flex} loading={busy} onPress={() => void remove()} testID="record-delete-confirm" />
           </View>
         ) : (
-          <Button title="이 기록 삭제" variant="danger" icon="trash" onPress={() => setConfirming(true)} testID="record-delete" />
+          <Button title="이 기록 삭제" variant="dangerSoft" icon="trash" onPress={() => setConfirming(true)} testID="record-delete" />
         )}
       </ScrollView>
     </Screen>
@@ -165,17 +167,10 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { paddingHorizontal: layout.screenX, paddingBottom: space.xxl, gap: space.xl },
-  card: {
-    gap: space.sm,
-    padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  content: { paddingHorizontal: layout.screenX, paddingBottom: space.xxl, gap: space.md },
+  gap: { gap: space.sm },
   routeRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  section: { gap: space.sm },
+  metrics: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: space.md },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   confirmRow: { flexDirection: 'row', gap: space.sm },
 });

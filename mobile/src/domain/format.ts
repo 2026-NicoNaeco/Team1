@@ -125,3 +125,8 @@ export function formatDateTime(iso: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/** 화면에 보여줄 장소 이름. 시연용 출발지의 "(데모 위치)" 꼬리표는 떼고 보여준다. */
+export function placeLabel(name: string): string {
+  return name.replace(/\s*\(데모 위치\)\s*$/, '');
+}

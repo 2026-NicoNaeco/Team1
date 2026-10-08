@@ -205,7 +205,7 @@ function noneText(code: FactorCode): string {
     case 'ACCIDENT_ZONE':
       return '자료상 사고다발구간에 해당하지 않아요';
     case 'TRAFFIC_VOLUME':
-      return '혼잡한 구간이 없어요 (모의값)';
+      return '혼잡한 구간이 없어요 (예상)';
     case 'LANE_CHANGE':
       return '필수 차로 변경이 없어요 (예상)';
     default:
@@ -438,11 +438,11 @@ function buildTradeoffs(entry: Entry, all: readonly Entry[], prefs: EffectivePre
   }
 
   if (out.length === 0) {
-    // 모든 항목이 후보 중 가장 낫더라도 데모 데이터라는 점은 언제나 확인할 점이다.
+    // 모든 항목이 후보 중 가장 낫더라도 실시간 교통이 반영되지 않았다는 점은 언제나 확인할 점이다.
     out.push({
-      id: 'demo_data',
+      id: 'live_traffic',
       kind: 'unknown_info',
-      text: '데모 데이터라 실제 도로 상황과 다를 수 있어요',
+      text: '실시간 교통 상황은 반영되지 않아서 시간이 달라질 수 있어요',
     });
   }
   return out;
@@ -490,7 +490,7 @@ function excludedNotices(excluded: readonly ExcludedRoute[]): RecommendationNoti
   return [
     {
       kind: 'excluded_restricted',
-      text: `통행 제한으로 제외된 경로가 ${excluded.length}개 있어요 (데모 데이터)`,
+      text: `통행 제한으로 제외된 경로가 ${excluded.length}개 있어요`,
     },
   ];
 }

@@ -1,7 +1,9 @@
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, space } from '../design/tokens';
 import { Icon, type IconName } from './Icon';
+import { PressableScale } from './PressableScale';
 import { Text } from './Text';
+import { haptics } from './haptics';
 
 interface ChipProps {
   label: string;
@@ -15,17 +17,18 @@ interface ChipProps {
   testID?: string;
 }
 
-/** 선택 칩. 선택되면 체크 표시와 색이 함께 바뀐다. */
+/** 선택 칩. 선택되면 색이 채워지고 체크 표시가 붙는다. */
 export function Chip({ label, selected = false, onPress, icon, multi = false, style, testID }: ChipProps) {
+  const fg = selected ? colors.onPrimary : colors.text;
   const lead = selected ? (
-    <Icon name="check" size={16} color={colors.primary} strokeWidth={3} />
+    <Icon name="check" size={16} color={fg} strokeWidth={3} />
   ) : icon ? (
     <Icon name={icon} size={16} color={colors.textSecondary} />
   ) : null;
   const content = (
     <>
       {lead}
-      <Text variant="captionStrong" color={selected ? colors.primary : colors.text} style={styles.label}>
+      <Text variant="captionStrong" color={fg} style={styles.label}>
         {label}
       </Text>
     </>
@@ -39,17 +42,22 @@ export function Chip({ label, selected = false, onPress, icon, multi = false, st
     );
   }
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole={multi ? 'checkbox' : 'radio'}
       accessibilityLabel={label}
       aria-checked={selected}
-      onPress={onPress}
+      onPress={() => {
+        haptics.selection();
+        onPress();
+      }}
+      pressedScale={0.95}
       hitSlop={{ top: 2, bottom: 2 }}
-      style={({ pressed }) => [styles.chip, selected ? styles.selected : styles.idle, pressed && styles.pressed, style]}
+      style={style}
+      contentStyle={({ pressed }) => [styles.chip, selected ? styles.selected : pressed ? styles.idlePressed : styles.idle]}
     >
       {content}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -59,13 +67,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.xs + 2,
     minHeight: 44,
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.lg,
     paddingVertical: space.sm,
-    borderRadius: radius.chip,
-    borderWidth: 1.5,
+    borderRadius: radius.round,
+    borderWidth: 1,
   },
   idle: { backgroundColor: colors.surface, borderColor: colors.border },
-  selected: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  pressed: { backgroundColor: colors.surfaceMuted },
+  idlePressed: { backgroundColor: colors.surfaceStrong, borderColor: colors.border },
+  selected: { backgroundColor: colors.primary, borderColor: colors.primary },
   label: { flexShrink: 1 },
 });

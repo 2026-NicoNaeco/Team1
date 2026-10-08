@@ -1,38 +1,39 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { FACTOR_GROUP_LABEL, FACTORS, SCORED_FACTORS, type FactorGroup } from '../domain/factors';
-import {
-  FREQUENCY_LABEL,
-  MAX_EXTRA_MINUTES_RANGE,
-  PRIORITY_LABEL,
-  describeFactorSetting,
-} from '../domain/preferences';
+import { FREQUENCY_LABEL, MAX_EXTRA_MINUTES_RANGE, describeFactorSetting } from '../domain/preferences';
 import type { DrivingFrequency, FactorCode, PriorityLevel, RoadTypePreference } from '../domain/types';
 import { colors, layout, radius, space } from '../design/tokens';
 import type { RootScreenProps } from '../navigation/types';
 import { useAppStore } from '../state/appStore';
 import { useEffectivePreferences } from '../state/selectors';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Chip } from '../ui/Chip';
 import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/IconButton';
 import { Notice } from '../ui/Notice';
-import { SelectCard } from '../ui/SelectCard';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import { Screen, ScreenHeader } from '../ui/Screen';
 import { Text } from '../ui/Text';
 
 const FREQUENCIES: DrivingFrequency[] = ['rare', 'sometimes', 'often', 'unknown'];
-const ROADS: Array<{ value: RoadTypePreference; title: string; description: string }> = [
-  { value: 'highway', title: '고속도로가 편해요', description: '신호는 적고, 합류·진출 구간이 있어요' },
-  { value: 'general', title: '일반도로가 편해요', description: '신호와 교차로가 많지만 합류 부담은 적어요' },
-  { value: 'none', title: '상관없어요', description: '도로 유형은 따로 따지지 않아요' },
+const ROADS: Array<{ value: RoadTypePreference; label: string; description: string }> = [
+  { value: 'highway', label: '고속도로', description: '신호는 적고, 합류·진출 구간이 있어요' },
+  { value: 'general', label: '일반도로', description: '신호와 교차로가 많지만 합류 부담은 적어요' },
+  { value: 'none', label: '상관없어요', description: '도로 유형은 따로 따지지 않아요' },
 ];
-const LEVELS: PriorityLevel[] = ['relaxed', 'normal', 'avoid'];
+const LEVEL_OPTIONS: Array<{ value: 'auto' | PriorityLevel; label: string }> = [
+  { value: 'auto', label: '자동' },
+  { value: 'relaxed', label: '신경 안 써요' },
+  { value: 'normal', label: '보통' },
+  { value: 'avoid', label: '피하고 싶어요' },
+];
 const GROUPS: FactorGroup[] = ['turn', 'lane', 'road', 'surroundings'];
 
 /**
  * 운전 성향 세부 설정. 온보딩에서 받지 않은 세부 요소는 여기서 조정한다.
- * 직접 정한 값은 평가로 조정된 값보다 우선하고, "자동"으로 돌리면 기본값 + 모의 학습으로 계산한다.
+ * 직접 정한 값은 평가로 조정된 값보다 우선하고, "자동"으로 돌리면 기본값 + 평가 반영으로 계산한다.
  */
 export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>) {
   const profile = useAppStore((s) => s.profile);
@@ -54,12 +55,9 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
     <Screen>
       <ScreenHeader title="내 운전 성향" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" testID="preferences-scroll">
-        <Notice
-          tone="info"
-          text="직접 정한 값이 평가로 조정된 값보다 우선해요. 바꾸면 보고 있던 경로 추천도 바로 다시 계산돼요."
-        />
+        <Notice tone="info" text="직접 정한 값이 평가로 조정된 값보다 우선해요. 바꾸면 보고 있던 경로 추천도 바로 다시 계산돼요." />
 
-        <View style={styles.section}>
+        <Card style={styles.card}>
           <Text variant="heading" accessibilityRole="header">
             최근 운전 빈도
           </Text>
@@ -71,32 +69,29 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
           <Text variant="caption" color={colors.textSecondary}>
             정하지 않은 복잡한 조작 요소의 시작점으로만 써요. 운전 실력을 평가하지 않아요.
           </Text>
-        </View>
+        </Card>
 
-        <View style={styles.section}>
+        <Card style={styles.card}>
           <Text variant="heading" accessibilityRole="header">
             도로 유형 선호
           </Text>
-          <View style={styles.cards} accessibilityRole="radiogroup">
-            {ROADS.map((r) => (
-              <SelectCard
-                key={r.value}
-                testID={`pref-road-${r.value}`}
-                title={r.title}
-                description={r.description}
-                selected={profile.roadTypePreference === r.value}
-                onPress={() => updateProfile({ roadTypePreference: r.value })}
-              />
-            ))}
-          </View>
-        </View>
+          <SegmentedControl
+            label="도로 유형 선호"
+            value={profile.roadTypePreference}
+            onChange={(value) => updateProfile({ roadTypePreference: value })}
+            options={ROADS.map((r) => ({ value: r.value, label: r.label, testID: `pref-road-${r.value}` }))}
+          />
+          <Text variant="caption" color={colors.textSecondary}>
+            {ROADS.find((r) => r.value === profile.roadTypePreference)?.description}
+          </Text>
+        </Card>
 
-        <View style={styles.section}>
+        <Card style={styles.card}>
           <Text variant="heading" accessibilityRole="header">
-            허용 추가 소요 시간
+            돌아가도 괜찮은 시간
           </Text>
           <Text variant="caption" color={colors.textSecondary}>
-            가장 빠른 경로보다 늘어나도 괜찮은 시간이에요. 0분이면 가장 빠른 경로만 추천해요. 넘는 경로는 숨기지 않고 ‘허용 시간 초과’로 표시해요.
+            가장 빠른 길보다 늘어나도 괜찮은 시간이에요. 0분이면 가장 빠른 길만 추천해요. 넘는 길은 숨기지 않고 ‘허용 시간 초과’로 표시해요.
           </Text>
           <View style={styles.stepper}>
             <IconButton
@@ -104,10 +99,11 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
               icon="minus"
               label="허용 시간 5분 줄이기"
               variant="filled"
+              size={52}
               disabled={extra <= min}
               onPress={() => updateProfile({ maxExtraMinutes: Math.max(min, extra - step) })}
             />
-            <Text variant="title2" align="center" style={styles.stepperValue} testID="extra-value" accessibilityLiveRegion="polite">
+            <Text variant="metric" align="center" style={styles.stepperValue} testID="extra-value" accessibilityLiveRegion="polite">
               +{extra}분
             </Text>
             <IconButton
@@ -115,25 +111,28 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
               icon="plus"
               label="허용 시간 5분 늘리기"
               variant="filled"
+              size={52}
               disabled={extra >= max}
               onPress={() => updateProfile({ maxExtraMinutes: Math.min(max, extra + step) })}
             />
           </View>
-        </View>
+        </Card>
 
-        <View style={styles.section}>
-          <Text variant="heading" accessibilityRole="header">
-            되도록 피하고 싶은 요소
-          </Text>
-          <Text variant="caption" color={colors.textSecondary}>
-            요소를 눌러 직접 정하거나 ‘자동’으로 둘 수 있어요. 통행 제한처럼 반드시 지켜야 하는 제약은 여기서 바꿀 수 없어요.
-          </Text>
+        <View style={styles.factors}>
+          <View style={styles.factorsHead}>
+            <Text variant="heading" accessibilityRole="header">
+              되도록 피하고 싶은 요소
+            </Text>
+            <Text variant="caption" color={colors.textSecondary}>
+              요소를 눌러 직접 정하거나 ‘자동’으로 둘 수 있어요. 통행 제한처럼 반드시 지켜야 하는 제약은 여기서 바꿀 수 없어요.
+            </Text>
+          </View>
           {GROUPS.map((group) => {
             const codes = SCORED_FACTORS.filter((c) => FACTORS[c].group === group);
             if (codes.length === 0) return null;
             return (
               <View key={group} style={styles.group}>
-                <Text variant="captionStrong" color={colors.textSecondary}>
+                <Text variant="captionStrong" color={colors.textSecondary} style={styles.groupLabel}>
                   {FACTOR_GROUP_LABEL[group]}
                 </Text>
                 <View style={styles.factorList}>
@@ -141,6 +140,7 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
                     const info = FACTORS[code];
                     const setting = describeFactorSetting(code, profile, prefs);
                     const open = expanded === code;
+                    const current: 'auto' | PriorityLevel = profile.priorities[code] ?? 'auto';
                     return (
                       <View key={code} style={i > 0 ? styles.factorDivider : undefined}>
                         <Pressable
@@ -151,34 +151,24 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
                           style={({ pressed }) => [styles.factorRow, pressed && styles.pressed]}
                         >
                           <View style={styles.flex}>
-                            <Text variant="bodyStrong">{info.label}</Text>
-                            <Text variant="caption" color={setting.source === 'user' ? colors.primary : colors.textSecondary}>
+                            <Text variant="lead">{info.label}</Text>
+                            <Text variant="caption" color={setting.source === 'user' ? colors.primaryStrong : colors.textSecondary}>
                               {setting.text}
                             </Text>
                           </View>
-                          <Icon name={open ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textSecondary} />
+                          <Icon name={open ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textTertiary} />
                         </Pressable>
                         {open ? (
                           <View style={styles.factorOptions}>
                             <Text variant="caption" color={colors.textSecondary}>
                               {info.description}
                             </Text>
-                            <SelectCard
-                              testID={`factor-${code}-auto`}
-                              title="자동"
-                              description="기본값에서 시작하고, 평가를 반영하도록 켜 두었다면 조금씩 조정돼요"
-                              selected={profile.priorities[code] === undefined}
-                              onPress={() => setPriority(code, null)}
+                            <SegmentedControl
+                              label={`${info.label} 설정`}
+                              value={current}
+                              onChange={(value) => setPriority(code, value === 'auto' ? null : value)}
+                              options={LEVEL_OPTIONS.map((o) => ({ ...o, testID: `factor-${code}-${o.value}` }))}
                             />
-                            {LEVELS.map((level) => (
-                              <SelectCard
-                                key={level}
-                                testID={`factor-${code}-${level}`}
-                                title={PRIORITY_LABEL[level]}
-                                selected={profile.priorities[code] === level}
-                                onPress={() => setPriority(code, level)}
-                              />
-                            ))}
                           </View>
                         ) : null}
                       </View>
@@ -191,7 +181,7 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
           <Button
             testID="clear-priorities"
             title={`직접 정한 값 모두 자동으로 (${explicitCount}개)`}
-            variant="secondary"
+            variant="neutral"
             disabled={explicitCount === 0}
             onPress={clearAll}
           />
@@ -203,16 +193,18 @@ export function PreferencesScreen({ navigation }: RootScreenProps<'Preferences'>
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { paddingHorizontal: layout.screenX, paddingBottom: space.xxl, gap: space.xl },
-  section: { gap: space.md },
+  content: { paddingHorizontal: layout.screenX, paddingBottom: space.xxl, gap: space.md },
+  card: { gap: space.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  cards: { gap: space.sm },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
-  stepperValue: { minWidth: 96 },
+  stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.xl },
+  stepperValue: { minWidth: 120 },
+  factors: { gap: space.md, marginTop: space.md },
+  factorsHead: { gap: space.xs, paddingHorizontal: space.xs },
   group: { gap: space.sm },
-  factorList: { backgroundColor: colors.surface, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  groupLabel: { paddingHorizontal: space.xs },
+  factorList: { backgroundColor: colors.surface, borderRadius: radius.card, overflow: 'hidden' },
   factorDivider: { borderTopWidth: 1, borderTopColor: colors.border },
-  factorRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 64, paddingHorizontal: space.lg, paddingVertical: space.md },
+  factorRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 68, paddingHorizontal: layout.cardPad, paddingVertical: space.md },
   pressed: { backgroundColor: colors.surfaceMuted },
-  factorOptions: { gap: space.sm, paddingHorizontal: space.lg, paddingBottom: space.lg },
+  factorOptions: { gap: space.md, paddingHorizontal: layout.cardPad, paddingBottom: layout.cardPad },
 });

@@ -228,7 +228,7 @@ const INFO: FactorInfo[] = [
     unitLoad: 0.9,
     unit: 'km',
     counter: 'km',
-    description: '차가 많은 구간의 길이예요. 데모에서는 고정된 모의값이에요.',
+    description: '차가 많은 구간의 길이예요. 실시간 교통이 아니라 평소 기준의 예상값이에요.',
     burdenSentence: '차가 많이 막히는 길은 부담돼요.',
     complex: false,
     icon: 'traffic',

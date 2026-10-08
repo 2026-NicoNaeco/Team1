@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { colors, space } from '../design/tokens';
+import { StyleSheet, View } from 'react-native';
+import { colors, radius } from '../design/tokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ArrivalScreen } from '../screens/ArrivalScreen';
 import { DemoInfoScreen } from '../screens/DemoInfoScreen';
@@ -17,7 +17,7 @@ import { RouteDetailScreen } from '../screens/RouteDetailScreen';
 import { SearchScreen } from '../screens/SearchScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { useAppStore } from '../state/appStore';
-import { Text } from '../ui/Text';
+import { Icon } from '../ui/Icon';
 import { TabBar } from './TabBar';
 import type { RootStackParamList, TabParamList } from './types';
 
@@ -38,13 +38,13 @@ function Tabs() {
   );
 }
 
+/** 저장된 설정을 읽는 아주 짧은 동안의 화면. 기기에서는 시작 화면이 이 자리를 덮고 있다. */
 function Splash() {
   return (
-    <View style={styles.splash}>
-      <ActivityIndicator color={colors.primary} />
-      <Text variant="caption" color={colors.textSecondary}>
-        저장된 설정을 불러오고 있어요
-      </Text>
+    <View style={styles.splash} aria-hidden>
+      <View style={styles.mark}>
+        <Icon name="navigation" size={34} color={colors.onPrimary} />
+      </View>
     </View>
   );
 }
@@ -90,5 +90,6 @@ export function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, backgroundColor: colors.bg },
+  splash: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  mark: { width: 76, height: 76, borderRadius: radius.card, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

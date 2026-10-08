@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { FACTORS } from '../domain/factors';
 import { learningStatus } from '../domain/learning';
@@ -9,6 +9,7 @@ import { useAppStore } from '../state/appStore';
 import { useTripStore } from '../state/tripStore';
 import { useUiStore } from '../state/uiStore';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Notice } from '../ui/Notice';
 import { Group, ListRow, SwitchRow } from '../ui/Rows';
 import { Screen, ScreenHeader } from '../ui/Screen';
@@ -18,23 +19,28 @@ type Confirm = 'records' | 'learned' | 'all';
 
 const CONFIRM_COPY: Record<Confirm, { title: string; text: string; action: string }> = {
   records: {
-    title: '시뮬레이션 기록을 모두 삭제할까요?',
-    text: '저장된 시뮬레이션 기록만 지워요. 운전 성향 설정과 추천에 반영된 취향은 그대로예요. 되돌릴 수 없어요.',
+    title: '주행 기록을 모두 삭제할까요?',
+    text: '저장된 주행 기록만 지워요. 운전 성향 설정과 추천에 반영된 취향은 그대로예요. 되돌릴 수 없어요.',
     action: '기록 삭제',
   },
   learned: {
-    title: '모의 개인화 결과를 초기화할까요?',
+    title: '추천에 반영된 취향을 초기화할까요?',
     text: '평가로 조정된 값만 지워요. 직접 정한 설정과 기록은 그대로예요.',
-    action: '개인화 초기화',
+    action: '취향 초기화',
   },
   all: {
     title: '모든 사용자 데이터를 삭제할까요?',
-    text: '운전 성향, 시뮬레이션 기록, 평가, 개인화 결과, 최근 목적지 같은 임시 저장값을 모두 지우고 처음 상태로 돌아가요. 되돌릴 수 없어요.',
+    text: '운전 성향, 주행 기록, 평가, 추천에 반영된 취향, 최근 목적지 같은 임시 저장값을 모두 지우고 처음 상태로 돌아가요. 되돌릴 수 없어요.',
     action: '모두 삭제',
   },
 };
 
-/** 설정: 성향·기록/개인화·데이터 삭제·데모 안내. 기록 삭제와 개인화 초기화를 구분해 둔다. */
+const APP_VERSION = '0.1.0';
+/** 앱 버전을 이 횟수만큼 빠르게 누르면 개발용 도구가 열린다 */
+const DEV_TAPS = 7;
+const DEV_TAP_WINDOW_MS = 3000;
+
+/** 설정: 성향·기록/개인화·내 데이터·앱 정보. 기록 삭제와 개인화 초기화를 구분해 둔다. */
 export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
   const profile = useAppStore((s) => s.profile);
   const learned = useAppStore((s) => s.learned);
@@ -46,9 +52,12 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
   const resetTrip = useTripStore((s) => s.resetTrip);
   const setLastRun = useTripStore((s) => s.setLastRun);
   const showToast = useUiStore((s) => s.showToast);
+  const devToolsUnlocked = useUiStore((s) => s.devToolsUnlocked);
+  const unlockDevTools = useUiStore((s) => s.unlockDevTools);
 
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [busy, setBusy] = useState(false);
+  const versionTaps = useRef<number[]>([]);
 
   const avoidCount = Object.values(profile.priorities).filter((v) => v === 'avoid').length;
   const adjustments = Object.values(learned.adjustments).filter((a) => a !== undefined);
@@ -70,9 +79,20 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
     setBusy(false);
     setConfirm(null);
     if (ok) {
-      showToast(confirm === 'all' ? '모든 데이터를 삭제했어요.' : confirm === 'records' ? '시뮬레이션 기록을 삭제했어요.' : '모의 개인화 결과를 초기화했어요.', 'success');
+      showToast(confirm === 'all' ? '모든 데이터를 삭제했어요.' : confirm === 'records' ? '주행 기록을 삭제했어요.' : '추천에 반영된 취향을 초기화했어요.', 'success');
     } else {
       showToast('삭제하지 못했어요. 이 기기의 저장 공간을 확인한 뒤 다시 시도해 주세요.', 'error');
+    }
+  };
+
+  const tapVersion = () => {
+    if (devToolsUnlocked) return;
+    const now = Date.now();
+    versionTaps.current = [...versionTaps.current.filter((t) => now - t < DEV_TAP_WINDOW_MS), now];
+    if (versionTaps.current.length >= DEV_TAPS) {
+      versionTaps.current = [];
+      unlockDevTools();
+      showToast('개발용 시나리오 도구를 열었어요.', 'info');
     }
   };
 
@@ -80,43 +100,38 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
     <Screen>
       <ScreenHeader size="large" title="설정" />
       <ScrollView contentContainerStyle={styles.content} testID="settings-scroll">
-        <View style={styles.section}>
-          <Text variant="captionStrong" color={colors.textSecondary}>
-            운전 성향
-          </Text>
-          <Group>
-            <ListRow
-              testID="settings-preferences"
-              icon="sliders"
-              title="내 운전 성향"
-              subtitle={`피하고 싶은 요소 ${avoidCount}개 · 최대 +${profile.maxExtraMinutes}분 허용`}
-              onPress={() => navigation.navigate('Preferences')}
-            />
-          </Group>
-        </View>
+        <Group>
+          <ListRow
+            testID="settings-preferences"
+            icon="sliders"
+            title="내 운전 성향"
+            subtitle={`피하고 싶은 요소 ${avoidCount}개 · 최대 +${profile.maxExtraMinutes}분`}
+            onPress={() => navigation.navigate('Preferences')}
+          />
+        </Group>
 
         <View style={styles.section}>
-          <Text variant="captionStrong" color={colors.textSecondary}>
+          <Text variant="captionStrong" color={colors.textSecondary} style={styles.sectionLabel}>
             기록과 개인화
           </Text>
           <Group>
             <SwitchRow
               testID="switch-records"
-              label="시뮬레이션 기록 저장"
-              description="끝낸 시뮬레이션을 이 기기의 ‘운전 기록’에 남겨요."
+              label="주행 기록 저장"
+              description="안내를 마친 주행을 이 기기의 ‘주행 기록’에 남겨요."
               value={profile.consent.saveRecords}
               onValueChange={(v) => setConsent({ saveRecords: v })}
             />
             <SwitchRow
               testID="switch-personalization"
               label="평가를 추천에 반영"
-              description="‘쉬웠어요/어려웠어요’ 평가로 요소별 회피 정도를 조금 조정해요. 모의 규칙이에요."
+              description="‘쉬웠어요/어려웠어요’ 평가로 요소별 회피 정도를 조금 조정해요."
               value={profile.consent.usePersonalization}
               onValueChange={(v) => setConsent({ usePersonalization: v })}
             />
           </Group>
-          <View style={styles.learned}>
-            <Text variant="bodyStrong">추천에 반영된 취향 (모의)</Text>
+          <Card style={styles.learned}>
+            <Text variant="lead">추천에 반영된 취향</Text>
             <Text variant="caption" color={colors.textSecondary}>
               {profile.consent.usePersonalization ? status.text : '평가 반영이 꺼져 있어서 지금은 추천에 쓰이지 않아요.'}
             </Text>
@@ -127,19 +142,19 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
                 {profile.priorities[a!.factor] ? ' · 직접 정한 값이 우선해요' : ''}
               </Text>
             ))}
-          </View>
+          </Card>
         </View>
 
         <View style={styles.section}>
-          <Text variant="captionStrong" color={colors.textSecondary}>
-            데이터 관리
+          <Text variant="captionStrong" color={colors.textSecondary} style={styles.sectionLabel}>
+            내 데이터
           </Text>
           <Group>
             <ListRow
               testID="delete-records"
               icon="trash"
               destructive
-              title="시뮬레이션 기록 삭제"
+              title="주행 기록 삭제"
               subtitle={`저장된 기록 ${recordCount}개`}
               onPress={() => setConfirm('records')}
               chevron={false}
@@ -148,7 +163,7 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
               testID="reset-learned"
               icon="refresh"
               destructive
-              title="모의 개인화 결과 초기화"
+              title="추천에 반영된 취향 초기화"
               subtitle="평가로 조정된 값만 지워요"
               onPress={() => setConfirm('learned')}
               chevron={false}
@@ -158,7 +173,7 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
               icon="trash"
               destructive
               title="모든 사용자 데이터 삭제"
-              subtitle="성향·기록·평가·개인화 결과를 모두 지워요"
+              subtitle="성향·기록·평가·취향을 모두 지워요"
               onPress={() => setConfirm('all')}
               chevron={false}
             />
@@ -167,7 +182,7 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
             <View style={styles.confirm}>
               <Notice tone="error" title={CONFIRM_COPY[confirm].title} text={CONFIRM_COPY[confirm].text} />
               <View style={styles.confirmRow}>
-                <Button title="취소" variant="secondary" style={styles.flex} onPress={() => setConfirm(null)} />
+                <Button title="취소" variant="neutral" style={styles.flex} onPress={() => setConfirm(null)} />
                 <Button
                   testID="confirm-delete"
                   title={CONFIRM_COPY[confirm].action}
@@ -182,28 +197,28 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
         </View>
 
         <View style={styles.section}>
-          <Text variant="captionStrong" color={colors.textSecondary}>
-            데모 안내
+          <Text variant="captionStrong" color={colors.textSecondary} style={styles.sectionLabel}>
+            앱 정보
           </Text>
           <Group>
             <ListRow
               testID="settings-demo-info"
               icon="info"
-              title="데모와 실제 구현 범위"
-              subtitle="무엇이 모의이고 무엇이 실제인지 알려드려요"
+              title="시연 안내"
+              subtitle="이 앱이 시연용 데이터로 동작하는 방식이에요"
               onPress={() => navigation.navigate('DemoInfo')}
             />
-            <ListRow
-              testID="settings-dev-tools"
-              icon="cone"
-              title="개발용 시나리오"
-              subtitle="오류·지연·정보 누락 상태를 재현해요"
-              onPress={() => navigation.navigate('DevTools')}
-            />
+            <ListRow testID="settings-version" title="버전" value={APP_VERSION} onPress={tapVersion} chevron={false} />
+            {devToolsUnlocked ? (
+              <ListRow
+                testID="settings-dev-tools"
+                icon="cone"
+                title="개발용 시나리오"
+                subtitle="오류·지연·정보 누락 상태를 재현해요"
+                onPress={() => navigation.navigate('DevTools')}
+              />
+            ) : null}
           </Group>
-          <Text variant="caption" color={colors.textSecondary} align="center">
-            뉴비맵 데모 0.1.0 · 시뮬레이션 전용
-          </Text>
         </View>
       </ScrollView>
     </Screen>
@@ -212,9 +227,10 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { paddingHorizontal: layout.screenX, paddingTop: space.md, paddingBottom: space.xxl, gap: space.xl },
+  content: { paddingHorizontal: layout.screenX, paddingTop: space.sm, paddingBottom: space.xxl, gap: space.xl },
   section: { gap: space.sm },
-  learned: { gap: space.xs, paddingHorizontal: space.xs, paddingTop: space.sm },
+  sectionLabel: { paddingHorizontal: space.xs },
+  learned: { gap: space.xs },
   confirm: { gap: space.md, marginTop: space.sm },
   confirmRow: { flexDirection: 'row', gap: space.sm },
 });
