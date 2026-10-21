@@ -16,8 +16,7 @@ export interface GeoPoint {
 // ───────────────────────── 운전 요소 ─────────────────────────
 
 /**
- * 운전 요소 코드. 백엔드(app/domain/factors.py)와 이름이 같은 것은 그대로 쓰고,
- * 프런트 기획에서 별도로 다루는 요소만 추가했다. 대응표는 README 참고.
+ * 운전 요소 코드. 백엔드(backend/app/domain/factors.py)와 코드·단위·뜻이 같다. 대응표는 README 5장.
  */
 export type FactorCode =
   | 'TRAFFIC_LIGHT'
