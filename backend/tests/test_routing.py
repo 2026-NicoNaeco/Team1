@@ -3,8 +3,8 @@ import random
 
 import pytest
 
-from app.domain.factors import FactorCode
-from app.domain.models import Maneuver, Point, Profile
+from app.domain.factors import FactorCode, MeasureUnit
+from app.domain.models import Availability, DataSourceKind, Maneuver, Measurement, Point, Profile, RoadClass
 from app.routing import polyline
 from app.routing.cost import classify_turn
 from app.routing.dijkstra import DijkstraRouteFinder
@@ -38,7 +38,8 @@ def test_polyline_matches_google_reference():
     [
         (10, set()),
         (90, {FactorCode.TURN_COUNT}),
-        (120, {FactorCode.TURN_COUNT, FactorCode.SHARP_TURN}),
+        # 100° 이상 회전도 방향 전환일 뿐이다. SHARP_TURN 은 급커브 구간이라 회전과 무관
+        (120, {FactorCode.TURN_COUNT}),
         (175, {FactorCode.TURN_COUNT, FactorCode.U_TURN}),
     ],
 )
@@ -49,7 +50,7 @@ def test_classify_turn(angle, expected):
 def test_fastest_profile_takes_short_narrow_road(square_graph: RoadGraph):
     [route] = DijkstraRouteFinder(square_graph).find_route(A, D, Profile.fastest())
     assert _via_b(route)
-    assert route.factor_counts[FactorCode.NARROW_ROAD] == 1
+    assert route.factor_amounts[FactorCode.NARROW_ROAD] == pytest.approx(0.4)  # km
     assert route.distance_m == 800
 
 
@@ -57,7 +58,7 @@ def test_hard_factor_avoids_narrow_road(square_graph: RoadGraph):
     profile = Profile(hard_factors=frozenset({FactorCode.NARROW_ROAD}))
     [route] = DijkstraRouteFinder(square_graph).find_route(A, D, profile)
     assert not _via_b(route)
-    assert route.factor_counts.get(FactorCode.NARROW_ROAD, 0) == 0
+    assert route.factor_amounts.get(FactorCode.NARROW_ROAD, 0) == 0
     assert route.difficulty_score == 1.0  # 방향 전환 1회
 
 
@@ -72,7 +73,7 @@ def test_start_heading_counts_u_turn(square_graph: RoadGraph):
     # 남쪽을 향한 상태에서 북쪽(B)으로 출발하면 유턴
     [route] = DijkstraRouteFinder(square_graph).find_route(A, D, Profile.fastest(), start_heading_deg=180)
     assert _via_b(route)
-    assert route.factor_counts[FactorCode.U_TURN] == 1
+    assert route.factor_amounts[FactorCode.U_TURN] == 1
 
 
 def test_alternatives_are_distinct_and_sorted():
@@ -115,7 +116,7 @@ def test_steps_turn_right_toward_north_then_east(square_graph: RoadGraph):
     [route] = DijkstraRouteFinder(square_graph).find_route(A, D, Profile.fastest())
     assert [s.maneuver for s in route.steps] == [Maneuver.DEPART, Maneuver.RIGHT, Maneuver.ARRIVE]
     assert route.steps[1].turn_angle_deg > 0
-    assert route.steps[0].factor_counts[FactorCode.NARROW_ROAD] == 1
+    assert route.steps[0].factor_amounts[FactorCode.NARROW_ROAD] == pytest.approx(0.4)
     # 단계 거리의 합은 경로 전체 거리와 같아야 한다
     assert sum(s.distance_m for s in route.steps) == pytest.approx(route.distance_m)
 
@@ -252,3 +253,147 @@ def test_oneway_edges_are_respected():
         "edges": [{"id": "AB", "from": "A", "to": "B", "oneway": True}],
     })
     assert set(graph.edges) == {"AB"}
+
+
+# ---------- FE 기준 요소 정의 ----------
+
+def _line_graph(*edge_attrs: dict) -> RoadGraph:
+    """동쪽으로 곧게 이어진 구간들. 회전 없이 구간 속성만 비교할 때 쓴다."""
+    nodes = [{"id": f"N{i}", "lat": 35.0, "lng": 127.0 + 0.002 * i} for i in range(len(edge_attrs) + 1)]
+    edges = [
+        {"id": f"E{i}", "from": f"N{i}", "to": f"N{i + 1}", "speed_kph": 30, **attrs}
+        for i, attrs in enumerate(edge_attrs)
+    ]
+    return RoadGraph.from_dict({"nodes": nodes, "edges": edges})
+
+
+def _line_route(graph: RoadGraph):
+    end = graph.nodes[f"N{len(graph.nodes) - 1}"].point
+    [route] = DijkstraRouteFinder(graph).find_route(Point(35.0, 127.0), end, Profile())
+    return route
+
+
+def test_measurements_distinguish_zero_from_unknown(square_graph: RoadGraph):
+    # A→B(lanes 1)→D. BD 에는 속성이 하나도 없다
+    [route] = DijkstraRouteFinder(square_graph).find_route(A, D, Profile.fastest())
+    m = route.measurements
+
+    narrow = m[FactorCode.NARROW_ROAD]
+    assert narrow.availability is Availability.PARTIAL
+    assert narrow.value == 0.4  # 확인된 구간(AB) 기준 km
+    assert narrow.coverage == 0.5
+
+    assert m[FactorCode.TRAFFIC_LIGHT].availability is Availability.UNKNOWN
+    assert m[FactorCode.TRAFFIC_LIGHT].value is None
+    # 회전은 도로 형상으로 계산하므로 항상 확인된다
+    assert m[FactorCode.TURN_COUNT] == Measurement(
+        Availability.KNOWN, MeasureUnit.COUNT, square_graph.source, square_graph.verification, value=1
+    )
+    # 좌회전이 없으면 비보호 좌회전 0회는 확인된 값이다
+    assert m[FactorCode.UNPROTECTED_LEFT].availability is Availability.KNOWN
+    assert m[FactorCode.UNPROTECTED_LEFT].value == 0
+    # 일반 도로에는 합류·분기 지점이 없다고 본다
+    assert m[FactorCode.MERGE_DIVERGE].availability is Availability.KNOWN
+
+
+def test_zone_is_counted_once_per_entry():
+    graph = _line_graph(
+        {"protected_zone": True}, {"protected_zone": True}, {"protected_zone": False}, {"protected_zone": True}
+    )
+    route = _line_route(graph)
+    # 보호구역 두 구간 연속 = 1곳, 빠져나왔다가 다시 들어가면 1곳 더
+    assert route.factor_amounts[FactorCode.PROTECTED_ZONE] == 2
+    assert route.measurements[FactorCode.PROTECTED_ZONE].value == 2
+    assert [h.code for h in route.hotspots].count(FactorCode.PROTECTED_ZONE) == 2
+
+
+def test_km_factors_are_lengths():
+    graph = _line_graph(
+        {"surface": "unpaved", "congested": True, "road_class": "HIGHWAY", "lanes": 2},
+        {"surface": "asphalt", "congested": False, "road_class": "HIGHWAY", "lanes": 2},
+    )
+    route = _line_route(graph)
+    first_km = graph.edges["E0"].length_m / 1000
+    m = route.measurements
+    assert m[FactorCode.UNPAVED_ROAD].value == round(first_km, 2)
+    assert m[FactorCode.TRAFFIC_VOLUME].value == round(first_km, 2)
+    assert m[FactorCode.ROAD_TYPE].value == round(route.distance_m / 1000, 2)
+    assert m[FactorCode.LANE_COUNT].value == 2
+    assert m[FactorCode.LANE_COUNT].unit is MeasureUnit.LANES
+
+
+def test_unprotected_left_is_part_of_turn_count():
+    # A →(동) C →(북, 좌회전) D. C 교차로 좌회전은 비보호
+    graph = RoadGraph.from_dict({
+        "nodes": [
+            {"id": "A", "lat": 35.0, "lng": 127.0},
+            {"id": "C", "lat": 35.0, "lng": 127.0044},
+            {"id": "D", "lat": 35.0036, "lng": 127.0044},
+        ],
+        "edges": [
+            {"id": "AC", "from": "A", "to": "C", "oneway": True, "unprotected_left": True},
+            {"id": "CD", "from": "C", "to": "D", "oneway": True},
+        ],
+    })
+    [route] = DijkstraRouteFinder(graph).find_route(A, D, Profile())
+    assert route.factor_amounts[FactorCode.TURN_COUNT] == 1
+    assert route.factor_amounts[FactorCode.UNPROTECTED_LEFT] == 1
+    assert route.measurements[FactorCode.UNPROTECTED_LEFT].availability is Availability.KNOWN
+    assert FactorCode.UNPROTECTED_LEFT in {h.code for h in route.hotspots}
+
+
+def test_left_turn_without_signal_data_is_unknown(square_graph: RoadGraph):
+    # A→C→D 의 좌회전 지점(C)에 신호 자료가 없다
+    profile = Profile(hard_factors=frozenset({FactorCode.NARROW_ROAD}))
+    [route] = DijkstraRouteFinder(square_graph).find_route(A, D, profile)
+    assert route.measurements[FactorCode.UNPROTECTED_LEFT].availability is Availability.UNKNOWN
+    assert FactorCode.UNPROTECTED_LEFT in route.steps[1].unknown_factors
+
+
+def test_highway_entry_and_exit_are_merge_diverge_not_turns():
+    graph = RoadGraph.from_dict({
+        "nodes": [
+            {"id": "A", "lat": 35.000, "lng": 127.000},
+            {"id": "B", "lat": 35.002, "lng": 127.000},
+            {"id": "C", "lat": 35.002, "lng": 127.004},
+            {"id": "D", "lat": 35.004, "lng": 127.004},
+        ],
+        "edges": [
+            {"id": "AB", "from": "A", "to": "B", "oneway": True, "road_class": "LOCAL", "name": "진입로"},
+            {"id": "BC", "from": "B", "to": "C", "oneway": True, "road_class": "HIGHWAY", "name": "고속로"},
+            {"id": "CD", "from": "C", "to": "D", "oneway": True, "road_class": "LOCAL", "name": "진출로"},
+        ],
+    })
+    [route] = DijkstraRouteFinder(graph).find_route(
+        Point(35.0, 127.0), Point(35.004, 127.004), Profile()
+    )
+    assert [s.maneuver for s in route.steps] == [
+        Maneuver.DEPART, Maneuver.MERGE, Maneuver.DIVERGE, Maneuver.ARRIVE,
+    ]
+    assert route.factor_amounts[FactorCode.MERGE_DIVERGE] == 2
+    assert route.factor_amounts.get(FactorCode.TURN_COUNT, 0) == 0
+    assert [s.instruction for s in route.steps] == ["출발 · 진입로", "합류 · 고속로", "진출 · 진출로", "목적지 도착"]
+    assert [s.road_class for s in route.steps[:3]] == [RoadClass.LOCAL, RoadClass.HIGHWAY, RoadClass.LOCAL]
+    # 고속도로 구간에 merge_diverge 자료가 없으면 그 구간은 정보 없음
+    assert route.measurements[FactorCode.MERGE_DIVERGE].availability is Availability.PARTIAL
+
+
+def test_steps_carry_offsets_and_turn_factors(square_graph: RoadGraph):
+    [route] = DijkstraRouteFinder(square_graph).find_route(A, D, Profile.fastest())
+    assert [s.offset_m for s in route.steps] == [0, 400, 800]
+    assert [s.instruction for s in route.steps] == ["출발", "우회전", "목적지 도착"]
+    # 우회전 단계의 요소에는 그 회전 자체가 들어간다
+    assert route.steps[1].factor_amounts[FactorCode.TURN_COUNT] == 1
+    # 자료가 없는 구간의 점수 요소는 unknown_factors 로 알린다
+    assert FactorCode.TRAFFIC_LIGHT in route.steps[1].unknown_factors
+    assert FactorCode.TURN_COUNT not in route.steps[1].unknown_factors
+
+
+def test_sample_graph_reports_demo_source():
+    finder = DijkstraRouteFinder(build_sample_graph())
+    [route] = finder.find_route(Point(35.1595, 126.8526), Point(35.1768, 126.9058), Profile())
+    lane_change = route.measurements[FactorCode.LANE_CHANGE]
+    assert lane_change.source.kind is DataSourceKind.DEMO_SAMPLE
+    # 샘플 도로망은 필수 차로 변경 자료를 일부러 비워 둔다
+    assert lane_change.availability is Availability.UNKNOWN
+    assert route.measurements[FactorCode.TRAFFIC_LIGHT].availability is Availability.KNOWN

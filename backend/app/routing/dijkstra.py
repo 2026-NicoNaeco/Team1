@@ -14,10 +14,11 @@ from collections.abc import Mapping, Sequence
 
 from app.domain.factors import FACTORS, FactorCode, FactorKind
 from app.domain.models import Hotspot, Point, Profile, Route
-from app.routing.cost import CostModel, heading_factors, transition_factors
+from app.routing.cost import CostModel, edge_amounts, heading_factors, transition_factors
 from app.routing.errors import NoRouteFound, OutOfServiceArea, SameLocation
 from app.routing.geo import midpoint
 from app.routing.graph import Edge, RoadGraph
+from app.routing.measure import measure_route
 from app.routing.steps import build_steps
 
 ALTERNATIVE_PENALTY = 1.4
@@ -122,7 +123,7 @@ class DijkstraRouteFinder:
             return cost_model.edge_cost(edge) * penalties.get(edge.id, 1.0)
 
         for edge in graph.out_edges.get(start, []):
-            cost = edge_cost(edge)
+            cost = edge_cost(edge) + cost_model.turn_cost(transition_factors(None, edge))
             if heading is not None:
                 cost += cost_model.turn_cost(heading_factors(heading, edge))
             if cost < dist.get(edge.id, float("inf")):
@@ -158,30 +159,35 @@ class DijkstraRouteFinder:
         return [self.graph.edges[i] for i in reversed(ids)]
 
     def _build_route(self, path: list[Edge], cost_model: CostModel, heading: float | None) -> Route:
-        counts: Counter[FactorCode] = Counter()
+        amounts: Counter[FactorCode] = Counter()
         hotspots: list[Hotspot] = []
         points: list[Point] = [path[0].geometry[0]]
         cost = 0.0
 
-        def add_turn(turn: dict[FactorCode, int], at: Point) -> None:
+        def add_transition(factors: dict[FactorCode, float], edge: Edge) -> None:
             nonlocal cost
-            counts.update(turn)
-            cost += cost_model.turn_cost(turn)
-            hotspots.extend(_hotspot(code, at) for code in turn if FACTORS[code].hotspot)
+            amounts.update(factors)
+            cost += cost_model.turn_cost(factors)
+            for code in factors:
+                meta = FACTORS[code]
+                if meta.hotspot:
+                    # 지역 진입은 구간 가운데, 회전·합류는 전환 지점에 표시
+                    at = midpoint(edge.geometry) if meta.kind is FactorKind.ZONE else edge.geometry[0]
+                    hotspots.append(_hotspot(code, at))
 
         if heading is not None:
-            add_turn(heading_factors(heading, path[0]), path[0].geometry[0])
+            add_transition(heading_factors(heading, path[0]), path[0])
 
         for i, edge in enumerate(path):
-            if i > 0:
-                add_turn(transition_factors(path[i - 1], edge), edge.geometry[0])
-            counts.update(edge.factor_counts)
+            add_transition(transition_factors(path[i - 1] if i > 0 else None, edge), edge)
+            own = edge_amounts(edge)
+            amounts.update(own)
             cost += cost_model.edge_cost(edge)
             points.extend(edge.geometry[1:])
             # 같은 요소가 연속된 구간은 첫 엣지에만 지점 표시
-            for code in edge.factor_counts:
+            for code in own:
                 meta = FACTORS[code]
-                if meta.kind is FactorKind.EDGE and meta.hotspot and not (i > 0 and path[i - 1].has(code)):
+                if meta.hotspot and not (i > 0 and path[i - 1].has(code)):
                     hotspots.append(_hotspot(code, midpoint(edge.geometry)))
 
         edge_ids = "|".join(e.id for e in path)
@@ -191,10 +197,11 @@ class DijkstraRouteFinder:
             distance_m=sum(e.length_m for e in path),
             duration_s=sum(e.travel_time_s for e in path),
             cost=cost,
-            difficulty_score=round(cost_model.points(counts), 1),
-            factor_counts=dict(counts),
+            difficulty_score=round(cost_model.points(amounts), 1),
+            factor_amounts=dict(amounts),
             hotspots=tuple(hotspots),
             steps=build_steps(path, heading),
+            measurements=measure_route(path, heading, self.graph.source, self.graph.verification),
         )
 
 

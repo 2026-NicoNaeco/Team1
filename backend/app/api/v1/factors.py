@@ -10,7 +10,9 @@ router = APIRouter(tags=["factors"])
 def list_factors() -> FactorListResponse:
     return FactorListResponse(
         factors=[
-            FactorOut(code=m.code, name=m.name, description=m.description, kind=m.kind)
+            FactorOut(
+                code=m.code, name=m.name, description=m.description, kind=m.kind, unit=m.unit, scored=m.scored
+            )
             for m in FACTORS.values()
         ]
     )

@@ -2,7 +2,8 @@
 
 DATABASE_URL 이 있으면 PostGIS 의 hotspots 테이블(db/init.sql)을 조회하고,
 없으면 로드된 도로망 그래프의 구간 속성에서 지점을 만든다.
-회전 비용 요소(유턴·급회전·방향 전환)는 경로에 따라 달라지므로 정적 지점에 포함되지 않는다.
+회전 요소(방향 전환·유턴·비보호 좌회전)와 고속도로 진입·진출은 경로에 따라 달라지므로
+정적 지점에 포함되지 않는다.
 """
 
 from collections.abc import Collection
@@ -81,9 +82,9 @@ def _records_from_graph(graph: RoadGraph) -> list[HotspotRecord]:
     records = []
     seen: set[tuple[frozenset[str], FactorCode]] = set()
     for edge in graph.edges.values():
-        for code in edge.factor_counts:
+        for code in edge.factor_amounts:
             meta = FACTORS[code]
-            if meta.kind is not FactorKind.EDGE or not meta.hotspot:
+            if meta.kind not in (FactorKind.EDGE, FactorKind.ZONE) or not meta.hotspot:
                 continue
             # 양방향 엣지는 한 번만
             key = (frozenset((edge.source, edge.target)), code)

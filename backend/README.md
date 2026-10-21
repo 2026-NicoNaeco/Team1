@@ -34,22 +34,90 @@ pytest
 | POST | `/v1/profile/analyze` | 운전 기록 요약 → 가중치 갱신 (저장 없음) |
 | GET | `/v1/hotspots?bbox=minLng,minLat,maxLng,maxLat&codes=` | 화면 영역 내 어려운 지점 |
 
+필드 이름은 snake_case 이고 의미·값은 FE(`mobile/src/domain/types.ts`)와 같다. FE 는 이름만 camelCase 로 바꾸면 된다.
+
+### 난이도 요소
+
+코드·단위·뜻은 FE `mobile/src/domain/factors.ts` 와 같다. `/v1/factors` 가 같은 목록을 `unit`, `scored` 와 함께 준다.
+
+| 코드 | 단위 | 세는 방법 |
+|---|---|---|
+| `TURN_COUNT` | 회 | 교차로 좌·우회전 **전체** 횟수. 비보호 좌회전·유턴 포함 |
+| `UNPROTECTED_LEFT` | 회 | 비보호 좌회전 (`TURN_COUNT` 의 일부) |
+| `U_TURN` | 회 | 유턴 (`TURN_COUNT` 의 일부) |
+| `SHARP_TURN` | 곳 | **도로 자체가 급하게 꺾이는 구간.** 교차로 회전과 별개 |
+| `ROUNDABOUT` | 회 | 회전교차로에 들어간 횟수 |
+| `LANE_CHANGE` | 회 | 다음 회전·진출을 위한 필수 차로 변경 (합류·분기 제외) |
+| `MERGE_DIVERGE` | 곳 | 합류·분기. 고속도로 진입·진출 포함, `TURN_COUNT` 에는 넣지 않음 |
+| `LANE_COUNT` | 차로 | 가장 긴 거리를 지나는 도로의 편도 차로 수. **점수에 안 씀** |
+| `NARROW_ROAD` | km | 1차로 이하 또는 폭 5m 미만 도로의 길이 |
+| `UNPAVED_ROAD` | km | 비포장 도로의 길이 |
+| `ROAD_TYPE` | km | 고속도로를 지나는 길이. **점수에 안 씀** (선호는 `road_preference`) |
+| `TRAFFIC_LIGHT` | 개 | 신호등 |
+| `TRAFFIC_VOLUME` | km | 평소 차가 많은 구간의 길이 (실시간 아님) |
+| `PROTECTED_ZONE` | 곳 | 보호구역. 연속한 구간은 한 곳으로 센다 |
+| `ACCIDENT_ZONE` | 곳 | 사고다발구간. 연속한 구간은 한 곳으로 센다 |
+
+### 경로 응답 (`/v1/routes/search`, `/v1/routes/reroute`)
+
+```json
+{
+  "routes": [{
+    "route_id": "r_b2d91cb1", "label": "A", "rank": 1, "via": "샘플대로",
+    "distance_m": 7272, "duration_s": 527, "extra_duration_s": 0, "difficulty_score": 33.0,
+    "toll": {"availability": "unknown"},
+    "polyline": "...",
+    "factors": {
+      "TURN_COUNT":  {"availability": "known", "value": 0, "unit": "count",
+                      "source": {"kind": "demo_sample", "name": "개발용 샘플 도로망"}, "verification": "unverified"},
+      "NARROW_ROAD": {"availability": "partial", "value": 0.4, "unit": "km", "coverage": 0.5, "source": {...}, "verification": "unverified"},
+      "LANE_CHANGE": {"availability": "unknown", "unit": "count", "source": {...}}
+    },
+    "hotspots": [...], "steps": [...]
+  }],
+  "excluded": []
+}
+```
+
+- `factors` 에는 **모든 요소**가 고정 순서로 들어 있다.
+  - `known`: 경로 전체를 확인했다. `value` 가 0 이면 "확인한 결과 없음".
+  - `partial`: 일부 구간만 확인했다. `value` 는 확인된 구간 기준이고 `coverage` 는 확인된 길이 비율이다
+    (비보호 좌회전은 확인된 좌회전 수 비율).
+  - `unknown`: 정보가 없다. `value` 가 없다. **0 이나 "안전함" 으로 표시하면 안 된다.**
+  - 도로망 자료에 키가 없는 구간은 "정보 없음" 이다 (`app/routing/graph.py` 상단 형식 참고).
+  - 방향 전환·유턴은 도로 형상으로 계산하므로 항상 `known` 이다.
+- `label` 은 rank 순서의 A, B, C … 다.
+- `via` 는 가장 길게 지나는 도로 이름 두 개(지나는 순서)다. 이름 있는 도로가 없으면 "이름 없는 도로".
+- `toll` 은 통행료 자료가 아직 없어서 항상 `{"availability": "unknown"}` 이다.
+- `excluded` 는 통행 제한 판정을 아직 하지 않아서 항상 빈 배열이다.
+
 ### 턴바이턴 안내
 
-`/v1/routes/search` · `/v1/routes/reroute` 응답의 각 경로는 `steps` 로 안내 단계를 함께 준다.
+각 경로는 `steps` 로 안내 단계를 함께 준다.
 회전이 없고 도로명이 같은 연속 구간은 한 단계로 합쳐지므로 `steps` 길이는 구간 수보다 훨씬 짧다.
 
 | 필드 | 설명 |
 |---|---|
-| `maneuver` | `DEPART` / `STRAIGHT` / `LEFT` / `RIGHT` / `SHARP_LEFT` / `SHARP_RIGHT` / `U_TURN` / `ROUNDABOUT` / `ARRIVE` |
+| `maneuver` | `DEPART` / `STRAIGHT` / `LEFT` / `RIGHT` / `SHARP_LEFT` / `SHARP_RIGHT` / `U_TURN` / `ROUNDABOUT` / `MERGE` / `DIVERGE` / `ARRIVE` |
+| `instruction` | 화면에 그대로 보여 주는 문구. 예: `우회전 · 상무대로`, `합류 · 샘플대로`, `목적지 도착` |
 | `lat`, `lng` | 이 동작을 하는 지점 |
 | `road_name` | 진입하는 도로명. 이름 없는 이면도로는 `null` |
+| `road_class` | `HIGHWAY` / `RAMP` / `ARTERIAL` / `COLLECTOR` / `LOCAL` |
+| `offset_m` | 경로 시작점부터 이 지점까지의 거리 |
 | `distance_m`, `duration_s` | 다음 동작까지의 거리·시간. `ARRIVE` 는 0 |
 | `turn_angle_deg` | 회전 각도 (-180~180). **양수는 우회전**, 직진·출발·도착은 0 |
-| `factors` | 이 단계에서 마주치는 난이도 요소만 (0 인 요소는 생략) |
+| `factors` | 이 단계에서 마주치는 점수 요소 `{코드: 값}`. 횟수 요소는 횟수, km 요소는 km. 0 인 요소는 생략. 단계를 시작하는 회전도 포함 |
+| `unknown_factors` | 이 단계 구간에 자료가 전혀 없는 점수 요소 |
 
 `distance_m` 의 합은 경로의 `distance_m` 과 같다. 회전 임계값(30°/100°/165°)은 난이도 계산과 공유한다.
+`MERGE`·`DIVERGE` 는 도로 등급이 고속도로로 바뀌거나(진입) 고속도로에서 다른 등급으로 바뀔 때(진출) 나온다.
 `reroute` 에 `heading_deg` 를 주면 첫 단계가 `DEPART` 대신 실제 회전 안내(예: `U_TURN`)로 나온다.
+
+### 장소 검색
+
+`places[]` 의 `category` 는 FE `PlaceCategory` 값이다: `station` / `university` / `school` / `park` / `market` /
+`hospital` / `mart` / `landmark` / `parking`. 카카오 분류를 이 값으로 바꾸고, 맞는 것이 없으면 `landmark` 다.
+카카오 원문 분류는 `category_name` 에 있다.
 
 ### 이탈 경로 회피 (reroute)
 
@@ -77,7 +145,8 @@ app/
   routing/    알고리즘 모듈
     interface.py    RouteFinder — BE 가 의존하는 유일한 인터페이스
     dijkstra.py     임시 구현: 엣지 기반 가중치 다익스트라 + 대안 경로
-    cost.py         비용 모델 (주행 시간 + 난이도 점수 × 15초)
+    cost.py         비용 모델 (주행 시간 + 난이도 점수 × 15초), 구간 전환 요소 판정
+    measure.py      엣지 경로 → 요소별 측정값 (known / partial / unknown)
     steps.py        엣지 경로 → 턴바이턴 안내 단계 (직진 구간 병합)
     graph.py        도로망 그래프 + JSON 로더 (형식은 파일 상단 주석)
                     좌표 → 최근접 노드는 격자 공간 인덱스 (노드 20만에서 선형 스캔 대비 수천 배)
@@ -99,3 +168,7 @@ db/init.sql   PostGIS hotspots 테이블
 `Route.steps` 는 기본값이 빈 튜플이라 안내를 만들지 않아도 구현체가 깨지지 않는다.
 다만 그 경우 API 의 `steps` 가 빈 배열로 나가 FE 안내가 사라지므로,
 엣지 경로를 들고 있다면 `app.routing.steps.build_steps(path, start_heading_deg)` 를 그대로 쓰면 된다.
+
+`Route.measurements` 도 비워 둘 수 있다. 그러면 `factor_amounts` 를 출처 미상의 확인값(`known`)으로 내보내서
+"정보 없음" 을 구분하지 못하므로, 같은 엣지 경로로 `app.routing.measure.measure_route(...)` 를 쓰는 것이 좋다.
+요소 판정(회전·지역 진입·고속도로 진입/진출)은 `app.routing.cost.transition` 한 곳에 있다.

@@ -1,10 +1,19 @@
 from types import MappingProxyType
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.domain.factors import FactorCode, FactorKind
-from app.domain.models import Maneuver, Point, Profile, RoadPreference
+from app.domain.factors import FactorCode, FactorKind, MeasureUnit
+from app.domain.models import (
+    DataSourceKind,
+    Maneuver,
+    Point,
+    Profile,
+    RoadClass,
+    RoadPreference,
+    Verification,
+)
+from app.services.places import PlaceCategory
 
 Weight = Annotated[float, Field(ge=0.0, le=5.0)]
 
@@ -58,6 +67,8 @@ class FactorOut(BaseModel):
     name: str
     description: str
     kind: FactorKind
+    unit: MeasureUnit
+    scored: bool = Field(description="경로 점수에 쓰이는 요소인지. false 면 참고 정보")
 
 
 class FactorListResponse(BaseModel):
@@ -71,7 +82,8 @@ class PlaceOut(BaseModel):
     name: str
     address: str
     road_address: str | None
-    category: str | None
+    category: PlaceCategory = Field(description="FE PlaceCategory 와 같은 값. 맞는 분류가 없으면 landmark")
+    category_name: str | None = Field(description="카카오 원문 분류")
     lat: float
     lng: float
     distance_m: int | None
@@ -109,9 +121,49 @@ class RerouteRequest(BaseModel):
     max_routes: int = Field(1, ge=1, le=5)
 
 
-class FactorCountOut(BaseModel):
-    code: FactorCode
-    count: int
+class DataSourceOut(BaseModel):
+    kind: DataSourceKind
+    name: str
+
+
+class KnownMeasurementOut(BaseModel):
+    availability: Literal["known"] = "known"
+    value: int | float = Field(description="경로 전체를 확인한 값. 0 이면 확인한 결과 없음")
+    unit: MeasureUnit
+    source: DataSourceOut
+    verification: Verification
+
+
+class PartialMeasurementOut(BaseModel):
+    availability: Literal["partial"] = "partial"
+    value: int | float = Field(description="확인된 구간 기준 값")
+    unit: MeasureUnit
+    coverage: float = Field(ge=0, le=1, description="확인된 길이 비율 (비보호 좌회전은 좌회전 수 비율)")
+    source: DataSourceOut
+    verification: Verification
+
+
+class UnknownMeasurementOut(BaseModel):
+    availability: Literal["unknown"] = "unknown"
+    unit: MeasureUnit
+    source: DataSourceOut
+
+
+MeasurementOut = Annotated[
+    KnownMeasurementOut | PartialMeasurementOut | UnknownMeasurementOut, Field(discriminator="availability")
+]
+
+
+class KnownTollOut(BaseModel):
+    availability: Literal["known"] = "known"
+    won: int
+
+
+class UnknownTollOut(BaseModel):
+    availability: Literal["unknown"] = "unknown"
+
+
+TollOut = Annotated[KnownTollOut | UnknownTollOut, Field(discriminator="availability")]
 
 
 class RouteHotspotOut(BaseModel):
@@ -124,30 +176,47 @@ class RouteHotspotOut(BaseModel):
 class RouteStepOut(BaseModel):
     index: int
     maneuver: Maneuver
+    instruction: str = Field(description="화면에 그대로 보여 주는 안내 문구. 예: '우회전 · 상무대로'")
     lat: float
     lng: float
     road_name: str | None = Field(None, description="도로명. 이름 없는 이면도로는 null")
-    distance_m: int = Field(description="이 단계를 진행하는 거리")
+    road_class: RoadClass | None
+    offset_m: int = Field(description="경로 시작점부터 이 안내 지점까지의 거리")
+    distance_m: int = Field(description="이 안내 지점에서 다음 안내 지점까지의 거리. ARRIVE 는 0")
     duration_s: int
     turn_angle_deg: float = Field(description="회전 각도 (-180~180). 양수는 우회전, 직진·출발·도착은 0")
-    factors: list[FactorCountOut] = Field(description="이 단계에서 마주치는 요소 (0 인 요소는 생략)")
+    factors: dict[FactorCode, int | float] = Field(
+        description="이 단계에서 마주치는 점수 요소. 횟수 요소는 횟수, km 요소는 km (0 인 요소는 생략)"
+    )
+    unknown_factors: list[FactorCode] = Field(description="이 단계 구간에 자료가 전혀 없는 점수 요소")
 
 
 class RouteOut(BaseModel):
     route_id: str
+    label: str = Field(description="경로 식별 글자 (A, B, C …). rank 순서")
     rank: int
+    via: str = Field(description="경유 도로 요약. 예: '상무대로 · 무진대로'")
     difficulty_score: float
     distance_m: int
     duration_s: int
     extra_duration_s: int
+    toll: TollOut
     polyline: str
-    factors: list[FactorCountOut]
+    factors: dict[FactorCode, MeasurementOut] = Field(description="모든 요소의 측정값")
     hotspots: list[RouteHotspotOut]
     steps: list[RouteStepOut]
 
 
+class ExcludedRouteOut(BaseModel):
+    reason: Literal["restricted"]
+    description: str
+
+
 class RouteSearchResponse(BaseModel):
     routes: list[RouteOut]
+    excluded: list[ExcludedRouteOut] = Field(
+        default_factory=list, description="통행 제한 등으로 후보에서 뺀 경로 안내. 아직 판정하지 않아 항상 빈 배열"
+    )
 
 
 # ---------- profile ----------
