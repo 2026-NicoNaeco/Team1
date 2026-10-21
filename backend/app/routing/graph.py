@@ -3,24 +3,35 @@
 자료정리 파트가 아래 JSON 형식으로 내보내면 GRAPH_PATH 로 바로 불러올 수 있다.
 
 {
+  "source": {"kind": "public_data", "name": "국가표준노드링크"},   # 선택. kind 는 Measurement 출처
+  "verification": "unverified",                                   # 선택. confirmed / estimated / unverified
   "nodes": [{"id": "n1", "lat": 35.15, "lng": 126.85}, ...],
   "edges": [{
     "id": "e1", "from": "n1", "to": "n2",
     "oneway": false,              # false 면 역방향 엣지 자동 생성 (id + "_r")
     "length_m": 420.0,            # 생략 시 좌표로 계산
     "speed_kph": 40,
-    "road_class": "LOCAL",        # HIGHWAY / ARTERIAL / LOCAL
+    "road_class": "LOCAL",        # HIGHWAY / RAMP / ARTERIAL / COLLECTOR / LOCAL
     "name": "상무대로",
     "geometry": [[lat, lng], ...],  # 선택. 양 끝 노드 사이의 중간 형상점
     "traffic_lights": 1,
-    "lanes": 2, "width_m": 6.5,   # 좁은 도로 판정
+    "lanes": 2, "width_m": 6.5,   # 편도 차로 수 · 도로 폭. 좁은 도로 판정과 차로 수
     "surface": "asphalt",         # OSM surface 태그
     "protected_zone": false,
     "roundabout": false,
-    "lane_change": 0,             # 합류·분기 지점 수
-    "accident_zone": false
+    "accident_zone": false,
+    "merge_diverge": 0,           # 구간 안에서 지나는 합류·분기 지점 수 (고속도로 진입·진출 자체는 제외)
+    "lane_changes": 0,            # 이 구간에서 필요한 차로 변경 수 (합류·분기 제외)
+    "sharp_curves": 0,            # 급커브 수 (교차로 회전이 아니라 도로 자체가 꺾이는 곳)
+    "congested": false,           # 평소 차가 많은 구간
+    "unprotected_left": false,    # 이 구간 끝 교차로에서 좌회전하면 비보호인지
+    "unprotected_left_reverse": false  # 역방향 엣지의 끝(= from 노드) 기준. 생략 시 unprotected_left 와 같음
   }, ...]
 }
+
+**키를 생략한 것과 0/false 는 다르다.** 생략하면 그 구간은 "정보 없음" 으로 응답한다.
+고속도로 진입·진출은 road_class 변화(HIGHWAY ↔ 그 외)로 BE 가 직접 세므로 merge_diverge 에 넣지 않는다.
+예전 이름 lane_change(합류·분기 지점 수)도 merge_diverge 로 읽는다.
 """
 
 import itertools
@@ -29,13 +40,14 @@ import math
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from app.domain.factors import FactorCode
-from app.domain.models import Point
+from app.domain.models import DataSource, DataSourceKind, Point, RoadClass, Verification
 from app.routing.geo import bearing_deg, haversine_m
+
+__all__ = ["Edge", "Node", "RoadClass", "RoadGraph"]
 
 NARROW_MAX_LANES = 1
 NARROW_MAX_WIDTH_M = 5.0
@@ -44,11 +56,26 @@ PAVED_SURFACES = {"asphalt", "concrete", "paved", "paving_stones", "concrete:pla
 METERS_PER_DEG_LAT = 110_574.0
 METERS_PER_DEG_LNG_EQUATOR = 111_320.0
 
+DEFAULT_SOURCE = DataSource(DataSourceKind.PUBLIC_DATA, "도로망 데이터")
 
-class RoadClass(StrEnum):
-    HIGHWAY = "HIGHWAY"
-    ARTERIAL = "ARTERIAL"
-    LOCAL = "LOCAL"
+# 구간 요소 → 그 요소의 자료가 있다고 볼 JSON 키
+_KNOWN_KEYS: dict[FactorCode, tuple[str, ...]] = {
+    FactorCode.TRAFFIC_LIGHT: ("traffic_lights",),
+    FactorCode.PROTECTED_ZONE: ("protected_zone",),
+    FactorCode.NARROW_ROAD: ("lanes", "width_m"),
+    FactorCode.UNPAVED_ROAD: ("surface",),
+    FactorCode.ROUNDABOUT: ("roundabout",),
+    FactorCode.LANE_CHANGE: ("lane_changes",),
+    FactorCode.MERGE_DIVERGE: ("merge_diverge", "lane_change"),
+    FactorCode.ACCIDENT_ZONE: ("accident_zone",),
+    FactorCode.SHARP_TURN: ("sharp_curves",),
+    FactorCode.TRAFFIC_VOLUME: ("congested",),
+    FactorCode.LANE_COUNT: ("lanes",),
+    FactorCode.ROAD_TYPE: ("road_class",),
+}
+
+# 고속도로 계열이 아니면 구간 안의 합류·분기 지점이 없다고 본다
+_MERGE_ROAD_CLASSES = {RoadClass.HIGHWAY, RoadClass.RAMP}
 
 
 @dataclass(frozen=True)
@@ -67,7 +94,13 @@ class Edge:
     speed_kph: float
     road_class: RoadClass
     name: str | None
-    factor_counts: dict[FactorCode, int]
+    # 구간 요소의 발생량. 횟수 요소는 횟수, km 요소는 해당 길이(km), 지역(ZONE) 요소는 1
+    factor_amounts: dict[FactorCode, float]
+    # 자료가 있는 요소. 여기 없는 요소는 이 구간에서 "정보 없음"
+    known: frozenset[FactorCode] = frozenset()
+    lanes: int | None = None
+    # 이 구간 끝 교차로에서 좌회전하면 비보호인지. None 이면 정보 없음
+    unprotected_left: bool | None = None
 
     @property
     def travel_time_s(self) -> float:
@@ -82,7 +115,7 @@ class Edge:
         return bearing_deg(self.geometry[-2], self.geometry[-1])
 
     def has(self, code: FactorCode) -> bool:
-        return self.factor_counts.get(code, 0) > 0
+        return self.factor_amounts.get(code, 0) > 0
 
 
 class _NodeGrid:
@@ -171,7 +204,15 @@ def _ring(cx: int, cy: int, radius: int) -> Iterable[tuple[int, int]]:
 
 
 class RoadGraph:
-    def __init__(self, nodes: list[Node], edges: list[Edge]):
+    def __init__(
+        self,
+        nodes: list[Node],
+        edges: list[Edge],
+        source: DataSource = DEFAULT_SOURCE,
+        verification: Verification = Verification.UNVERIFIED,
+    ):
+        self.source = source
+        self.verification = verification
         self.nodes: dict[str, Node] = {n.id: n for n in nodes}
         self.edges: dict[str, Edge] = {}
         self.out_edges: dict[str, list[Edge]] = defaultdict(list)
@@ -199,10 +240,18 @@ class RoadGraph:
             source, target = str(raw["from"]), str(raw["to"])
             inner = tuple(Point(float(lat), float(lng)) for lat, lng in raw.get("geometry", []))
             geometry = (by_id[source].point, *inner, by_id[target].point)
-            edges.append(_build_edge(str(raw["id"]), source, target, geometry, raw))
+            edges.append(_build_edge(str(raw["id"]), source, target, geometry, raw, raw.get("unprotected_left")))
             if not raw.get("oneway", False):
-                edges.append(_build_edge(f"{raw['id']}_r", target, source, geometry[::-1], raw))
-        return cls(nodes, edges)
+                reverse_left = raw.get("unprotected_left_reverse", raw.get("unprotected_left"))
+                edges.append(_build_edge(f"{raw['id']}_r", target, source, geometry[::-1], raw, reverse_left))
+        raw_source = data.get("source")
+        source = (
+            DataSource(DataSourceKind(raw_source["kind"]), str(raw_source["name"]))
+            if raw_source
+            else DEFAULT_SOURCE
+        )
+        verification = Verification(data.get("verification", Verification.UNVERIFIED))
+        return cls(nodes, edges, source, verification)
 
     @classmethod
     def from_json_file(cls, path: str | Path) -> "RoadGraph":
@@ -211,11 +260,18 @@ class RoadGraph:
 
 
 def _build_edge(
-    edge_id: str, source: str, target: str, geometry: tuple[Point, ...], raw: dict[str, Any]
+    edge_id: str,
+    source: str,
+    target: str,
+    geometry: tuple[Point, ...],
+    raw: dict[str, Any],
+    unprotected_left: bool | None,
 ) -> Edge:
     length = raw.get("length_m")
     if length is None:
         length = sum(haversine_m(geometry[i], geometry[i + 1]) for i in range(len(geometry) - 1))
+    road_class = RoadClass(raw.get("road_class", RoadClass.LOCAL))
+    lanes = raw.get("lanes")
     return Edge(
         id=edge_id,
         source=source,
@@ -223,13 +279,23 @@ def _build_edge(
         geometry=geometry,
         length_m=float(length),
         speed_kph=float(raw.get("speed_kph", 30)),
-        road_class=RoadClass(raw.get("road_class", RoadClass.LOCAL)),
+        road_class=road_class,
         name=raw.get("name"),
-        factor_counts=_edge_factor_counts(raw),
+        factor_amounts=_edge_factor_amounts(raw, float(length) / 1000, road_class),
+        known=_edge_known(raw, road_class),
+        lanes=int(lanes) if lanes is not None else None,
+        unprotected_left=None if unprotected_left is None else bool(unprotected_left),
     )
 
 
-def _edge_factor_counts(raw: dict[str, Any]) -> dict[FactorCode, int]:
+def _edge_known(raw: dict[str, Any], road_class: RoadClass) -> frozenset[FactorCode]:
+    known = {code for code, keys in _KNOWN_KEYS.items() if any(k in raw for k in keys)}
+    if road_class not in _MERGE_ROAD_CLASSES:
+        known.add(FactorCode.MERGE_DIVERGE)
+    return frozenset(known)
+
+
+def _edge_factor_amounts(raw: dict[str, Any], length_km: float, road_class: RoadClass) -> dict[FactorCode, float]:
     lanes = raw.get("lanes")
     width = raw.get("width_m")
     narrow = (lanes is not None and lanes <= NARROW_MAX_LANES) or (
@@ -237,13 +303,17 @@ def _edge_factor_counts(raw: dict[str, Any]) -> dict[FactorCode, int]:
     )
     surface = raw.get("surface")
     unpaved = surface is not None and surface not in PAVED_SURFACES
-    counts = {
+    amounts = {
         FactorCode.TRAFFIC_LIGHT: int(raw.get("traffic_lights", 0)),
         FactorCode.PROTECTED_ZONE: int(bool(raw.get("protected_zone", False))),
-        FactorCode.NARROW_ROAD: int(narrow),
-        FactorCode.UNPAVED_ROAD: int(unpaved),
+        FactorCode.NARROW_ROAD: length_km if narrow else 0.0,
+        FactorCode.UNPAVED_ROAD: length_km if unpaved else 0.0,
         FactorCode.ROUNDABOUT: int(bool(raw.get("roundabout", False))),
-        FactorCode.LANE_CHANGE_TRAFFIC: int(raw.get("lane_change", 0)),
+        FactorCode.LANE_CHANGE: int(raw.get("lane_changes", 0)),
+        FactorCode.MERGE_DIVERGE: int(raw.get("merge_diverge", raw.get("lane_change", 0))),
         FactorCode.ACCIDENT_ZONE: int(bool(raw.get("accident_zone", False))),
+        FactorCode.SHARP_TURN: int(raw.get("sharp_curves", 0)),
+        FactorCode.TRAFFIC_VOLUME: length_km if raw.get("congested", False) else 0.0,
+        FactorCode.ROAD_TYPE: length_km if road_class is RoadClass.HIGHWAY else 0.0,
     }
-    return {code: n for code, n in counts.items() if n > 0}
+    return {code: n for code, n in amounts.items() if n > 0}

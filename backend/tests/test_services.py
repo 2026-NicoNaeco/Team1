@@ -6,7 +6,14 @@ import pytest
 from app.domain.factors import FactorCode
 from app.domain.models import Point, Profile
 from app.services.cache import MemoryCache
-from app.services.places import KakaoPlaceSearch, Place, PlaceSearchService, PlaceSearchUnavailable
+from app.services.places import (
+    KakaoPlaceSearch,
+    Place,
+    PlaceCategory,
+    PlaceSearchService,
+    PlaceSearchUnavailable,
+    kakao_category,
+)
 from app.services.profile_analyzer import FactorStat, analyze
 
 
@@ -38,7 +45,7 @@ class CountingProvider:
 
     async def search(self, query: str, near: Point | None, size: int) -> list[Place]:
         self.calls += 1
-        return [Place("1", query, "광주 서구", None, None, 35.15, 126.85, None)]
+        return [Place("1", query, "광주 서구", None, PlaceCategory.LANDMARK, None, 35.15, 126.85, None)]
 
 
 def test_place_search_is_cached():
@@ -74,6 +81,8 @@ def test_kakao_provider_parses_response():
     assert place.name == "광주광역시청"
     assert place.lat == pytest.approx(35.160032)
     assert place.distance_m == 532
+    assert place.category is PlaceCategory.LANDMARK
+    assert place.category_name == "공공기관"
 
 
 def test_kakao_provider_without_key_is_unavailable():
@@ -83,3 +92,23 @@ def test_kakao_provider_without_key_is_unavailable():
 
     with pytest.raises(PlaceSearchUnavailable):
         asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    ("group_code", "category_name", "expected"),
+    [
+        ("SW8", "교통,수송 > 지하철,전철 > 광주도시철도1호선", PlaceCategory.STATION),
+        ("", "교통,수송 > 기차,철도 > 기차역 > KTX정차역", PlaceCategory.STATION),
+        ("SC4", "교육,학문 > 학교 > 대학교", PlaceCategory.UNIVERSITY),
+        ("SC4", "교육,학문 > 학교 > 초등학교", PlaceCategory.SCHOOL),
+        ("", "여행 > 공원 > 도시근린공원", PlaceCategory.PARK),
+        ("", "가정,생활 > 시장 > 전통시장", PlaceCategory.MARKET),
+        ("HP8", "의료,건강 > 종합병원", PlaceCategory.HOSPITAL),
+        ("MT1", "가정,생활 > 슈퍼마켓 > 대형마트", PlaceCategory.MART),
+        ("PK6", "교통,수송 > 주차장", PlaceCategory.PARKING),
+        ("PO3", "사회,공공기관 > 행정기관", PlaceCategory.LANDMARK),
+        (None, None, PlaceCategory.LANDMARK),
+    ],
+)
+def test_kakao_category(group_code, category_name, expected):
+    assert kakao_category(group_code, category_name) is expected

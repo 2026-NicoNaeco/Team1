@@ -13,7 +13,7 @@ ORIGIN = {"lat": 35.1595, "lng": 126.8526}
 DESTINATION = {"lat": 35.1768, "lng": 126.9058}
 PROFILE = {
     "road_preference": "LOCAL",
-    "hard_factors": ["U_TURN", "NARROW_ROAD", "LANE_CHANGE_TRAFFIC"],
+    "hard_factors": ["U_TURN", "NARROW_ROAD", "MERGE_DIVERGE"],
     "easy_factors": ["TRAFFIC_LIGHT"],
     "weights": {"U_TURN": 1.8, "NARROW_ROAD": 1.5},
 }
@@ -26,6 +26,47 @@ def test_health(client):
 def test_factors(client):
     factors = client.get("/v1/factors").json()["factors"]
     assert [f["code"] for f in factors] == [c.value for c in FactorCode]
+    by_code = {f["code"]: f for f in factors}
+    assert by_code["NARROW_ROAD"]["unit"] == "km"
+    assert by_code["LANE_COUNT"] == {**by_code["LANE_COUNT"], "unit": "lanes", "scored": False}
+    assert by_code["U_TURN"]["scored"] is True
+
+
+def test_route_search_matches_frontend_shape(client):
+    resp = client.post("/v1/routes/search", json={"origin": ORIGIN, "destination": DESTINATION, "max_routes": 3})
+    body = resp.json()
+    assert body["excluded"] == []
+    routes = body["routes"]
+    assert [r["label"] for r in routes] == ["A", "B", "C"][: len(routes)]
+    for r in routes:
+        assert r["via"]
+        assert r["toll"] == {"availability": "unknown"}
+        assert set(r["factors"]) == {c.value for c in FactorCode}
+        for m in r["factors"].values():
+            assert m["source"]["kind"] == "demo_sample"
+            if m["availability"] == "unknown":
+                # "정보 없음" 에는 값이 없다 — 0 으로 오해하지 않게
+                assert "value" not in m
+            else:
+                assert "value" in m and "verification" in m
+        assert r["factors"]["LANE_CHANGE"]["availability"] == "unknown"
+        offsets = [s["offset_m"] for s in r["steps"]]
+        assert offsets == sorted(offsets) and offsets[0] == 0
+        for step in r["steps"]:
+            assert step["instruction"]
+            assert step["road_class"] in {"HIGHWAY", "RAMP", "ARTERIAL", "COLLECTOR", "LOCAL"}
+            assert isinstance(step["factors"], dict)
+            assert isinstance(step["unknown_factors"], list)
+
+
+def test_route_search_accepts_every_frontend_factor_code(client):
+    # FE 는 모든 요소의 가중치를 보낼 수 있다. 참고 정보(LANE_COUNT·ROAD_TYPE)도 거절하지 않는다
+    weights = {c.value: 1.0 for c in FactorCode}
+    resp = client.post(
+        "/v1/routes/search",
+        json={"origin": ORIGIN, "destination": DESTINATION, "profile": {"weights": weights}},
+    )
+    assert resp.status_code == 200
 
 
 def test_route_search(client):
@@ -54,7 +95,11 @@ def test_route_steps_are_navigable(client):
     # 도착 단계만 거리가 0 이고, 회전 단계는 좌/우 부호가 들어 있다
     assert steps[-1]["distance_m"] == 0
     assert all(s["distance_m"] > 0 for s in steps[:-1])
-    turns = [s for s in steps if s["maneuver"] in {"LEFT", "RIGHT", "SHARP_LEFT", "SHARP_RIGHT", "U_TURN"}]
+    # 고속도로 진입·진출(MERGE/DIVERGE)도 방향을 바꾸는 단계다
+    turns = [
+        s for s in steps
+        if s["maneuver"] in {"LEFT", "RIGHT", "SHARP_LEFT", "SHARP_RIGHT", "U_TURN", "MERGE", "DIVERGE"}
+    ]
     assert turns, "샘플 그래프 경로에는 회전이 최소 한 번 있어야 한다"
     assert all(s["turn_angle_deg"] != 0 for s in turns)
     assert all(abs(s["turn_angle_deg"]) <= 180 for s in steps)
