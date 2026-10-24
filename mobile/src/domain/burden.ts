@@ -9,6 +9,11 @@ import type { BurdenLevel, EffectivePreferences, FactorCode, RouteFactors } from
  *
  * 중복 가산 방지: 방향 전환은 "전체 − 비보호 좌회전 − 유턴"에만 일반 전환 부담을 적용한다.
  * (비보호 좌회전·유턴은 각자의 부담으로 한 번만 센다. factors.ts 참고)
+ *
+ * 정보 없음: 확인하지 못한 값은 0 이 아니다. 비교할 값(assumeForMissing)이 주어지면
+ * "정보 없음"은 그 값으로, "일부만 확인"은 확인 못 한 비율만큼 그 값을 더해 보수적으로 계산한다.
+ * 그래서 정보가 빠졌다는 이유만으로 부담이 낮아 보이지 않는다. 비교할 값이 없으면 그 요소는 계산에서 빠지고
+ * missing 으로 알린다 (이때 결과는 하한이다).
  */
 
 /** index 가 이 값 미만이면 "낮음", MEDIUM_MAX 미만이면 "보통", 그 이상은 "높음" */
@@ -28,8 +33,16 @@ export interface BurdenResult {
   index: number;
   level: BurdenLevel;
   contributions: BurdenContribution[];
-  /** 부담 계산 대상인데 정보가 없거나 일부만 확인된 요소 */
+  /** 부담 계산 대상인데 정보가 없거나 일부만 확인된 요소. 하나라도 있으면 실제 부담은 이보다 높을 수 있다 */
   missing: FactorCode[];
+}
+
+export interface BurdenOptions {
+  /**
+   * 정보가 없는 구간에 있다고 가정할 값(요소별, 경로 전체 기준).
+   * 보통 다른 후보에서 확인된 가장 큰 값을 준다 (recommend.ts 의 assumedWorst).
+   */
+  assumeForMissing?: Partial<Record<FactorCode, number>>;
 }
 
 export function levelForIndex(index: number): BurdenLevel {
@@ -44,10 +57,16 @@ export function knownValue(factors: RouteFactors, code: FactorCode): number | nu
   return m.availability === 'known' ? m.value : null;
 }
 
-/** 값이 있으면(일부 확인 포함) 그 값, 없으면 null. 부담 계산용 */
-function usableValue(factors: RouteFactors, code: FactorCode): number | null {
+/**
+ * 부담 계산에 쓰는 값.
+ * 확인됨: 그 값 / 일부만 확인: 확인된 값 + 확인 못 한 비율 × 가정값 / 정보 없음: 가정값(없으면 null)
+ */
+function usableValue(factors: RouteFactors, code: FactorCode, assume: BurdenOptions['assumeForMissing']): number | null {
   const m = factors[code];
-  return m.availability === 'unknown' ? null : m.value;
+  const assumed = assume?.[code];
+  if (m.availability === 'known') return m.value;
+  if (m.availability === 'partial') return m.value + (1 - Math.min(1, Math.max(0, m.coverage))) * (assumed ?? 0);
+  return assumed ?? null;
 }
 
 /** 비보호 좌회전·유턴을 뺀 일반 좌·우회전 횟수. 계산에 필요한 값이 확인되지 않았으면 null */
@@ -68,7 +87,8 @@ export function highwayKm(factors: RouteFactors): number {
   return knownValue(factors, 'ROAD_TYPE') ?? 0;
 }
 
-export function computeBurden(factors: RouteFactors, prefs: EffectivePreferences): BurdenResult {
+export function computeBurden(factors: RouteFactors, prefs: EffectivePreferences, options: BurdenOptions = {}): BurdenResult {
+  const assume = options.assumeForMissing;
   const contributions: BurdenContribution[] = [];
   const missing: FactorCode[] = [];
 
@@ -81,12 +101,12 @@ export function computeBurden(factors: RouteFactors, prefs: EffectivePreferences
     let amount: number | null;
     if (code === 'TURN_COUNT') {
       // 전체에서 부분집합(비보호 좌회전·유턴)을 뺀다. 부분집합 값을 모르면 전체를 그대로 쓴다.
-      const total = usableValue(factors, 'TURN_COUNT');
-      const unprotected = usableValue(factors, 'UNPROTECTED_LEFT') ?? 0;
-      const uTurn = usableValue(factors, 'U_TURN') ?? 0;
+      const total = usableValue(factors, 'TURN_COUNT', assume);
+      const unprotected = usableValue(factors, 'UNPROTECTED_LEFT', assume) ?? 0;
+      const uTurn = usableValue(factors, 'U_TURN', assume) ?? 0;
       amount = total === null ? null : Math.max(0, total - unprotected - uTurn);
     } else {
-      amount = usableValue(factors, code);
+      amount = usableValue(factors, code, assume);
     }
     if (amount === null || amount === 0) continue;
     contributions.push({ factor: code, points: amount * info.unitLoad * prefs.weights[code] });

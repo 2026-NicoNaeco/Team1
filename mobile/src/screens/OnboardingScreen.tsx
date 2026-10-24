@@ -49,6 +49,8 @@ export function OnboardingScreen() {
   const [burdens, setBurdens] = useState<FactorCode[]>([]);
   const [roadType, setRoadType] = useState<RoadTypePreference>('none');
   const [extra, setExtra] = useState<number>(DEFAULT_MAX_EXTRA_MINUTES);
+  // "잘 모르겠어요"를 골랐는지. 기본값(10분)이 선택지에도 있어서 값만으로는 구분할 수 없다
+  const [extraUnsure, setExtraUnsure] = useState(false);
   const [saveRecords, setSaveRecords] = useState(false);
   const [personalization, setPersonalization] = useState(false);
 
@@ -220,17 +222,29 @@ export function OnboardingScreen() {
             </View>
             <View style={styles.tiles} accessibilityRole="radiogroup">
               {EXTRA_OPTIONS.map((m) => (
-                <TimeTile key={m} testID={`extra-${m}`} minutes={m} selected={extra === m} onPress={() => setExtra(m)} />
+                <TimeTile
+                  key={m}
+                  testID={`extra-${m}`}
+                  minutes={m}
+                  selected={!extraUnsure && extra === m}
+                  onPress={() => {
+                    setExtra(m);
+                    setExtraUnsure(false);
+                  }}
+                />
               ))}
             </View>
             <View style={styles.unsureRow}>
               <Chip
                 testID="extra-unsure"
                 label="잘 모르겠어요"
-                selected={!EXTRA_OPTIONS.includes(extra)}
-                onPress={() => setExtra(DEFAULT_MAX_EXTRA_MINUTES)}
+                selected={extraUnsure}
+                onPress={() => {
+                  setExtra(DEFAULT_MAX_EXTRA_MINUTES);
+                  setExtraUnsure(true);
+                }}
               />
-              {!EXTRA_OPTIONS.includes(extra) ? (
+              {extraUnsure ? (
                 <Text variant="caption" color={colors.textSecondary} style={styles.flex}>
                   잘 모르겠다면 {DEFAULT_MAX_EXTRA_MINUTES}분으로 시작해요.
                 </Text>

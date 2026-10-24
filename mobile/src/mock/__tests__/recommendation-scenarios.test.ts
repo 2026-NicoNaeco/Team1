@@ -7,6 +7,7 @@ import type { DriverProfile, RecommendationResult, RouteCandidate } from '../../
 import { computeRoutes, DEMO_GRAPH } from '../mockRouteProvider';
 import { PLACE_NODE } from '../places';
 import { PRESETS } from '../presets';
+import { HIDDEN_ROAD_INFO } from '../scenario';
 
 const NOW = '2026-10-08T09:00:00.000Z';
 const { candidates, excluded } = computeRoutes(DEMO_GRAPH, 'stn', PLACE_NODE['univ-gate']!);
@@ -203,3 +204,22 @@ describe('추천 입력을 바꾸지 않는다', () => {
 
 // 타입 확인용
 export type _Unused = RouteCandidate;
+
+describe('정보가 빠진 경로의 부담 표시', () => {
+  it('부담 계산에 쓰는 요소가 하나라도 확인되지 않은 경로만 "실제로는 더 높을 수 있다"고 표시한다', () => {
+    const result = run(profileOf());
+    for (const item of result.items) {
+      const c = candidates.find((x) => x.id === item.routeId)!;
+      const anyMissing = Object.values(FACTORS).some((f) => f.scored && c.factors[f.code].availability !== 'known');
+      expect(item.burdenMayBeHigher).toBe(anyMissing);
+    }
+  });
+
+  it('"일부 도로 정보 없음"이면 모든 경로를 하한으로 표시하고, 추천 경로는 그대로다 (모두 같은 정보가 빠졌으므로)', () => {
+    const hidden = computeRoutes(DEMO_GRAPH, 'stn', PLACE_NODE['univ-gate']!, { forceUnknown: HIDDEN_ROAD_INFO });
+    const prefs = resolvePreferences(profileOf(), emptyLearned());
+    const result = recommend(hidden.candidates, prefs, hidden.excluded);
+    expect(result.items.every((i) => i.burdenMayBeHigher)).toBe(true);
+    expect(hidden.candidates.find((c) => c.id === result.recommendedRouteId)?.label).toBe(recommendedLabel(run(profileOf())));
+  });
+});

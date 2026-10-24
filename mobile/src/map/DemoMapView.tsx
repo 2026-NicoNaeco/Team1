@@ -30,7 +30,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Icon } from '../ui/Icon';
 import { IconButton } from '../ui/IconButton';
 import { Text } from '../ui/Text';
-import { chooseChipAnchors, nearestRoute, splitPolyline } from './chipAnchor';
+import { chooseChipAnchors, nearestRoute, splitPolyline, spreadChips } from './chipAnchor';
 import {
   centerCamera,
   clampCamera,
@@ -127,6 +127,7 @@ function markerBoxes(markers: Array<{ marker: MapMarker; at: LocalPoint }>, cam:
 }
 
 const NO_BOXES: Box[] = [];
+const NO_CHIP_PLACEMENT: { boxes: Box[]; offsets: Record<string, number> } = { boxes: NO_BOXES, offsets: {} };
 
 /**
  * 경로 칩이 차지하는 영역을 글자 수로 어림잡는 값(px). 같은 자리의 지명 라벨은 그리지 않는다.
@@ -525,17 +526,25 @@ export function DemoMapView({
     .map((r) => ({ id: r.id, selected: r.selected, chars: [...(r.chipText ?? '')].length }));
   const chipKey = chipSpecs.map((c) => `${c.id}:${c.selected ? 1 : 0}:${c.chars}`).join('|');
   const chipScale = clamp(fontScale, 1, 1.6);
-  // 칩 자리의 지명 라벨은 비운다. 칩이 같은 값이면 같은 배열을 줘서 SVG 가 불필요하게 다시 그려지지 않게 한다
-  const chipBoxes = useMemo<Box[]>(() => {
-    if (!size || !cam || chipSpecs.length === 0) return NO_BOXES;
-    return chipSpecs.map((chip) => {
+  // 칩 자리의 지명 라벨은 비운다. 칩이 같은 값이면 같은 배열을 줘서 SVG 가 불필요하게 다시 그려지지 않게 한다.
+  // 지도가 작게 보여 칩끼리 겹치면 세로로 비켜 쌓아, 보이는 범위 안에 겹치지 않게 둔다 (spreadChips).
+  const chipPlacement = useMemo<{ boxes: Box[]; offsets: Record<string, number> }>(() => {
+    if (!size || !cam || chipSpecs.length === 0) return NO_CHIP_PLACEMENT;
+    const placed = chipSpecs.map((chip) => {
       const c = chipCenter(chipAnchors[chip.id]!, cam, size, reserved);
       const halfW = ((CHIP_BASE_W + (chip.selected ? CHIP_CHECK_W : 0) + chip.chars * CHIP_CHAR_W) / 2 + CHIP_MARGIN) * chipScale;
       const halfH = CHIP_HALF_H * chipScale;
-      return { x0: c.x - halfW, x1: c.x + halfW, y0: c.y - halfH, y1: c.y + halfH };
+      return { id: chip.id, selected: chip.selected, x: c.x, y: c.y, halfW, halfH };
     });
+    const offsets = spreadChips(placed, { top: reserved.top, bottom: size.h - reserved.bottom });
+    const boxes = placed.map((c) => {
+      const dy = offsets[c.id] ?? 0;
+      return { x0: c.x - c.halfW, x1: c.x + c.halfW, y0: c.y + dy - c.halfH, y1: c.y + dy + c.halfH };
+    });
+    return { boxes, offsets };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chipKey, chipAnchors, cam, size, reserved.top, reserved.bottom, reserved.left, reserved.right, chipScale]);
+  const chipBoxes = chipPlacement.boxes;
 
   const targetFor = useCallback(
     (req: CameraRequest, s: Size, ins: Insets): Camera => {
@@ -686,11 +695,14 @@ export function DemoMapView({
       {size && cam
         ? routes
             .filter((r) => r.chipText && chipAnchors[r.id])
+            // 겹치더라도 선택한 칩이 맨 위에 보이도록 마지막에 그린다
+            .sort((a, b) => Number(a.selected) - Number(b.selected))
             .map((r) => {
               const { x, y } = chipCenter(chipAnchors[r.id]!, cam, size, reserved);
+              const dy = chipPlacement.offsets[r.id] ?? 0;
               const selectable = Boolean(onRoutePress) && interactive;
               return (
-                <View key={`chip-${r.id}`} style={[styles.chipWrap, { left: x - 70, top: y - 20 }]}>
+                <View key={`chip-${r.id}`} style={[styles.chipWrap, { left: x - 70, top: y - 20 + dy }]}>
                   <Pressable
                     accessibilityRole="radio"
                     accessibilityLabel={`${r.label} 경로 ${r.chipText}`}

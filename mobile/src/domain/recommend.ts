@@ -30,6 +30,8 @@ import type {
  * 2. 허용한 추가 시간 안의 경로를 먼저 추천한다. 안에서는 운전 부담이 낮은 순이다.
  * 3. 부담이 비슷하면 시간·거리·통행료가 작은 쪽이 앞선다 (작은 가중치로 반영).
  * 허용 시간을 넘는 경로는 몰래 완화해 추천하지 않고, 별도 안내와 함께 목록 뒤쪽에 둔다.
+ * 정보가 빠진 요소는 다른 후보에서 확인된 가장 나쁜 값이 있다고 가정해 계산한다 (assumedWorst).
+ * 정보가 빠졌다는 이유만으로 앞서지 않게 하되, 확인된 값이 훨씬 나은 경로까지 밀어내지는 않는다.
  */
 
 const TIME_WEIGHT_PER_MINUTE = 0.12;
@@ -75,11 +77,12 @@ export function recommend(
   )[0]!;
   const fastestMinutes = minutesFromSeconds(fastest.durationS);
   const minDistanceM = Math.min(...candidates.map((c) => c.distanceM));
+  const assumeForMissing = assumedWorst(candidates);
 
   const entries: Entry[] = candidates.map((candidate) => {
     const durationMinutes = minutesFromSeconds(candidate.durationS);
     const extraMinutes = Math.max(0, durationMinutes - fastestMinutes);
-    const burden = computeBurden(candidate.factors, prefs);
+    const burden = computeBurden(candidate.factors, prefs, { assumeForMissing });
     const tollWon = candidate.toll.availability === 'known' ? candidate.toll.won : 0;
     const score =
       burden.index +
@@ -115,6 +118,7 @@ export function recommend(
       extraMinutes: entry.extraMinutes,
       durationMinutes: entry.durationMinutes,
       burdenLevel: entry.burden.level,
+      burdenMayBeHigher: entry.burden.missing.length > 0,
       burdenDrivers: burdenDrivers(entry),
       hasMissingInfo: entry.burden.missing.length > 0 || entry.candidate.toll.availability === 'unknown',
       headline: headlines.get(id) ?? `${entry.candidate.via} 경유`,
@@ -131,6 +135,21 @@ export function recommend(
     fastestRouteId: fastest.id,
     notices: buildNotices(ordered, recommendedId, prefs, excluded),
   };
+}
+
+/**
+ * 정보가 빠진 구간에 있다고 가정할 값: 요소마다 후보들 중 "확인된" 값의 최댓값.
+ * 어느 후보에서도 확인되지 않은 요소는 넣지 않는다 (모두 같은 정보가 없으니 서로 비교할 근거가 없다).
+ */
+export function assumedWorst(candidates: readonly RouteCandidate[]): Partial<Record<FactorCode, number>> {
+  const out: Partial<Record<FactorCode, number>> = {};
+  for (const code of SCORED_FACTORS) {
+    for (const c of candidates) {
+      const m = c.factors[code];
+      if (m.availability === 'known') out[code] = Math.max(out[code] ?? 0, m.value);
+    }
+  }
+  return out;
 }
 
 // ───────────────────────── 특징 한 줄 ─────────────────────────

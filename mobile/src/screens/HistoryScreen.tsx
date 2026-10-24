@@ -1,6 +1,6 @@
 import { FlatList, StyleSheet, View } from 'react-native';
 import { FACTOR_ORDER, FACTORS, tagLabel } from '../domain/factors';
-import { RATING_LABEL, formatDateTime, formatDistance, formatFactorValue, formatMinutes } from '../domain/format';
+import { RATING_LABEL, formatDateTime, formatDistance, formatFactorValue, formatMinutes, progressPercent } from '../domain/format';
 import type { FactorCode, SimulationRecord } from '../domain/types';
 import { colors, layout, space } from '../design/tokens';
 import type { TabScreenProps } from '../navigation/types';
@@ -40,7 +40,7 @@ function RecordCard({ record, onPress }: { record: SimulationRecord; onPress: ()
             {formatDateTime(record.createdAt)}
           </Text>
           <View style={styles.pills}>
-            {stopped ? <StatusPill label={`중도 종료 ${Math.round(record.progress * 100)}%`} tone="caution" /> : null}
+            {stopped ? <StatusPill label={`중도 종료 ${progressPercent(record.progress)}%`} tone="caution" /> : null}
             {rating ? <StatusPill label={rating} tone="primary" /> : null}
           </View>
         </View>

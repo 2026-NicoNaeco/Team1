@@ -2,7 +2,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatKm, formatMinutes, formatNavDistance, minutesFromSeconds } from '../domain/format';
+import { formatKm, formatMinutes, formatNavDistance, minutesFromSeconds, progressPercent } from '../domain/format';
 import type { GuidanceStep } from '../domain/types';
 import { colors, layout, radius, shadow, space } from '../design/tokens';
 import { MapView, type MapMarker, type MapRoute } from '../map';
@@ -257,7 +257,7 @@ export function NavigationScreen({ navigation, route: navRoute }: RootScreenProp
           <View style={styles.confirm}>
             <NavText variant="title2">안내를 끝낼까요?</NavText>
             <NavText variant="caption" color={colors.textSecondary}>
-              지금까지 {Math.round((snap?.fraction ?? 0) * 100)}% 왔어요. 끝낸 뒤에도 평가를 남기거나 이어서 시작할 수 있어요.
+              지금까지 {progressPercent(snap?.fraction ?? 0)}% 왔어요. 끝낸 뒤에도 평가를 남기거나 이어서 시작할 수 있어요.
             </NavText>
             <View style={styles.buttons}>
               <Button

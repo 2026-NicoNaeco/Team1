@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react-native';
 import { memo } from 'react';
-import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, G, Rect } from 'react-native-svg';
 import AccidentIcon from 'lucide-react-native/icons/octagon-alert';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import ArrowRightLeft from 'lucide-react-native/icons/arrow-right-left';
@@ -36,6 +36,7 @@ import Navigation from 'lucide-react-native/icons/navigation';
 import Pause from 'lucide-react-native/icons/pause';
 import Play from 'lucide-react-native/icons/play';
 import Plus from 'lucide-react-native/icons/plus';
+import RefreshCcw from 'lucide-react-native/icons/refresh-ccw';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Road from 'lucide-react-native/icons/road';
 import Route from 'lucide-react-native/icons/route';
@@ -81,6 +82,8 @@ const LUCIDE = {
   map: MapIcon,
   trash: Trash,
   refresh: RefreshCw,
+  /** 회전교차로: 반시계 방향으로 도는 화살표 (국내 회전교차로의 통행 방향) */
+  roundabout: RefreshCcw,
   pause: Pause,
   play: Play,
   stop: Square,
@@ -113,7 +116,7 @@ const LUCIDE = {
   sparkles: Sparkles,
 } as const satisfies Record<string, LucideIcon>;
 
-type CustomName = 'traffic-light' | 'roundabout';
+type CustomName = 'traffic-light';
 
 export type IconName = keyof typeof LUCIDE | CustomName;
 
@@ -124,34 +127,25 @@ interface IconProps {
   strokeWidth?: number;
 }
 
-/** 직접 그린 아이콘 (24x24 격자, lucide 와 같은 선 굵기) */
-function CustomIcon({ name, size, color, strokeWidth }: Required<IconProps>) {
+/** 직접 그린 신호등 아이콘 (24x24 격자, lucide 와 같은 선 굵기) */
+function TrafficLightIcon({ size, color, strokeWidth }: Omit<Required<IconProps>, 'name'>) {
   const common = { stroke: color, strokeWidth, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      {name === 'traffic-light' ? (
-        <G {...common}>
-          <Rect x="7.5" y="2" width="9" height="20" rx="3" />
-          <Circle cx="12" cy="7" r="1.1" fill={color} />
-          <Circle cx="12" cy="12" r="1.1" fill={color} />
-          <Circle cx="12" cy="17" r="1.1" fill={color} />
-        </G>
-      ) : (
-        <G {...common}>
-          <Circle cx="11" cy="12" r="5" />
-          <Path d="M11 17v5" />
-          <Path d="M16 8l4-4" />
-          <Path d="M15.5 4H20v4.5" />
-        </G>
-      )}
+      <G {...common}>
+        <Rect x="7.5" y="2" width="9" height="20" rx="3" />
+        <Circle cx="12" cy="7" r="1.1" fill={color} />
+        <Circle cx="12" cy="12" r="1.1" fill={color} />
+        <Circle cx="12" cy="17" r="1.1" fill={color} />
+      </G>
     </Svg>
   );
 }
 
 /** 장식용 아이콘. 의미는 옆의 글자나 부모의 accessibilityLabel 이 전달한다. */
 export const Icon = memo(function Icon({ name, size = 24, color = colors.text, strokeWidth = 2 }: IconProps) {
-  if (name === 'traffic-light' || name === 'roundabout') {
-    return <CustomIcon name={name} size={size} color={color} strokeWidth={strokeWidth} />;
+  if (name === 'traffic-light') {
+    return <TrafficLightIcon size={size} color={color} strokeWidth={strokeWidth} />;
   }
   const Cmp = LUCIDE[name];
   return <Cmp size={size} color={color} strokeWidth={strokeWidth} />;

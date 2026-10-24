@@ -3,7 +3,7 @@ import { formatDistance, formatExtra, formatMinutes, formatWon } from '../domain
 import type { RankedRoute, RouteCandidate, TradeoffItem, TradeoffKind } from '../domain/types';
 import { colors, radius, space } from '../design/tokens';
 import { LetterBadge, RecommendBadge, SelectedMark, StatusPill } from './Badges';
-import { BurdenMeter } from './BurdenMeter';
+import { BurdenMeter, burdenLabel } from './BurdenMeter';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 import { Text } from './Text';
@@ -14,6 +14,8 @@ interface RouteCardProps {
   ranked: RankedRoute;
   selected: boolean;
   onPress: () => void;
+  /** 후보가 이 경로 하나뿐이면 "맞춤 추천" 대신 중립 표시 "유일한 경로"를 쓴다 (비교한 결과가 아니므로) */
+  onlyCandidate?: boolean;
   testID?: string;
 }
 
@@ -40,12 +42,14 @@ export function pickCardTradeoff(tradeoffs: TradeoffItem[]): { item: TradeoffIte
  * 1) 특징·추천 여부  2) 소요 시간과 추가 시간  3) 부담 수준과 줄어드는 이유  4) 거리·통행료  5) 감수할 점
  * "맞춤 추천"(설정에 따른 추천)과 "선택됨"(지금 고른 경로)은 서로 다른 표시다.
  */
-export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCardProps) {
+export function RouteCard({ route, ranked, selected, onPress, onlyCandidate = false, testID }: RouteCardProps) {
+  const recommended = ranked.isRecommended && !onlyCandidate;
   const tradeoff = pickCardTradeoff(ranked.tradeoffs);
   const toll = route.toll.availability === 'known' ? (route.toll.won > 0 ? `통행료 ${formatWon(route.toll.won)}` : '통행료 없음') : '통행료 정보 없음';
-  const summary = `${route.label} 경로 ${ranked.headline}. ${formatMinutes(ranked.durationMinutes)}, ${formatExtra(ranked.extraMinutes)}. 예상 운전 부담 ${
-    { low: '낮음', medium: '보통', high: '높음' }[ranked.burdenLevel]
-  }.${ranked.isRecommended ? ' 맞춤 추천.' : ''}${selected ? ' 현재 선택됨.' : ''}`;
+  const summary = `${route.label} 경로 ${ranked.headline}. ${formatMinutes(ranked.durationMinutes)}, ${formatExtra(ranked.extraMinutes)}. 예상 운전 부담 ${burdenLabel(
+    ranked.burdenLevel,
+    ranked.burdenMayBeHigher,
+  )}.${recommended ? ' 맞춤 추천.' : onlyCandidate ? ' 유일한 경로.' : ''}${selected ? ' 현재 선택됨.' : ''}`;
   const caution = tradeoff?.item.kind === 'over_limit';
   const unknown = tradeoff?.item.kind === 'unknown_info';
 
@@ -68,9 +72,10 @@ export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCar
           <Text variant="lead" numberOfLines={2}>
             {ranked.headline}
           </Text>
-          {ranked.isRecommended || !ranked.withinTimeLimit ? (
+          {recommended || onlyCandidate || !ranked.withinTimeLimit ? (
             <View style={styles.badges}>
-              {ranked.isRecommended ? <RecommendBadge /> : null}
+              {recommended ? <RecommendBadge /> : null}
+              {onlyCandidate ? <StatusPill label="유일한 경로" tone="neutral" /> : null}
               {!ranked.withinTimeLimit ? <StatusPill label="허용 시간 초과" tone="caution" /> : null}
             </View>
           ) : null}
@@ -86,7 +91,7 @@ export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCar
       </View>
 
       <View style={styles.burden}>
-        <BurdenMeter level={ranked.burdenLevel} />
+        <BurdenMeter level={ranked.burdenLevel} mayBeHigher={ranked.burdenMayBeHigher} />
         {ranked.burdenDrivers.length > 0 ? (
           <Text variant="caption" color={colors.textSecondary}>
             주된 요소: {ranked.burdenDrivers.map((d) => d.text).join(' · ')}
@@ -102,8 +107,13 @@ export function RouteCard({ route, ranked, selected, onPress, testID }: RouteCar
       <View style={styles.reasons}>
         {ranked.reasons.map((reason) => (
           <View key={reason.id} style={styles.reasonRow}>
+            {/* ✓ 는 다른 경로보다 나은 점에만 쓴다. 중립적인 사실(예: "신호등 5개를 지나요")은 회색 점 */}
             <View style={styles.reasonIcon}>
-              <Icon name="check" size={16} color={colors.primary} strokeWidth={3.2} />
+              {reason.kind === 'fact' ? (
+                <View style={styles.factDot} />
+              ) : (
+                <Icon name="check" size={16} color={colors.primary} strokeWidth={3.2} />
+              )}
             </View>
             <Text variant="body" style={styles.reasonText}>
               {reason.text}
@@ -146,7 +156,8 @@ const styles = StyleSheet.create({
   burden: { gap: space.sm },
   reasons: { gap: space.xs + 2 },
   reasonRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  reasonIcon: { paddingTop: 4 },
+  reasonIcon: { paddingTop: 4, width: 16, alignItems: 'center' },
+  factDot: { width: 6, height: 6, borderRadius: 3, marginTop: 5, backgroundColor: colors.textTertiary },
   reasonText: { flex: 1 },
   tradeoff: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', padding: space.md, borderRadius: radius.control },
   tradeoffNeutral: { backgroundColor: colors.surface },

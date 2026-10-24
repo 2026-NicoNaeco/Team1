@@ -80,6 +80,18 @@ export function applyLearning(
   };
 }
 
+/**
+ * 조정값을 숫자 대신 문장으로 바꾼다. 화면에는 범위를 알 수 없는 내부 수치(+0.4 같은)를 보여주지 않는다.
+ * 어려웠어요 두 번(+0.8) 이상이면 "많이", 그보다 적으면 "조금"으로 말한다.
+ */
+export function describeAdjustment(delta: number): string {
+  const eps = 1e-9;
+  if (delta >= LEARNING_STEP_HARD * 2 - eps) return '많이 더 피해요';
+  if (delta > eps) return '조금 더 피해요';
+  if (delta < -eps) return '조금 덜 피해요';
+  return '평가가 서로 상쇄돼 그대로예요';
+}
+
 export type LearningPhase = 'none' | 'exploring' | 'established';
 
 export function learningStatus(learned: LearnedState): { phase: LearningPhase; text: string } {

@@ -9,6 +9,7 @@ import {
   josa,
   minutesFromSeconds,
   placeLabel,
+  progressPercent,
 } from '../format';
 import { known, partial, unknown } from './fixtures';
 
@@ -51,6 +52,17 @@ describe('표시 포맷', () => {
   it('추가 시간: 0 이면 "가장 빠름", 아니면 "+N분"', () => {
     expect(formatExtra(0)).toBe('가장 빠름');
     expect(formatExtra(6)).toBe('빠른 경로보다 +6분');
+  });
+
+  it('진행률: 도착하지 않았으면 내림하고 99%를 넘지 않는다', () => {
+    expect(progressPercent(0)).toBe(0);
+    expect(progressPercent(0.5)).toBe(50);
+    expect(progressPercent(0.29)).toBe(29); // 0.29 * 100 = 28.999… 오차
+    expect(progressPercent(0.996)).toBe(99); // 반올림하면 100 이 되던 값
+    expect(progressPercent(1)).toBe(99); // 도착하지 않았다면 100 이 아니다
+    expect(progressPercent(1, true)).toBe(100);
+    expect(progressPercent(Number.NaN)).toBe(0);
+    expect(progressPercent(-0.2)).toBe(0);
   });
 
   it('날짜는 기기의 현지 시간으로 표시한다', () => {

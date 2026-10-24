@@ -272,6 +272,8 @@ export interface RankedRoute {
   extraMinutes: number;
   durationMinutes: number;
   burdenLevel: BurdenLevel;
+  /** 부담 계산에 쓰는 요소 중 정보가 없거나 일부만 확인된 것이 있어, 실제 부담은 이보다 높을 수 있다 */
+  burdenMayBeHigher: boolean;
   /** 부담에 가장 크게 반영된 요소 (최대 2개). 예: "비보호 좌회전 2회" */
   burdenDrivers: { factor: FactorCode; text: string }[];
   /** 부담을 판단할 때 확인되지 않은 정보가 있었는지 */

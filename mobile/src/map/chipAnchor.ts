@@ -100,3 +100,50 @@ export function nearestRoute(
   }
   return best;
 }
+
+/** 화면에 놓인 경로 칩 하나 (중심 좌표와 반 너비·반 높이, px) */
+export interface PlacedChip {
+  id: string;
+  selected: boolean;
+  x: number;
+  y: number;
+  halfW: number;
+  halfH: number;
+}
+
+/**
+ * 지도가 작게 보이면 경로 칩끼리 화면에서 겹친다. 가로로 겹치는 칩끼리는 세로로 비켜 쌓는다.
+ * 1) 위에 있는 칩부터, 앞서 놓은 칩과 가로로 겹치면 그 아래로 내린다.
+ * 2) 아래에 있는 칩부터, 보이는 범위(bounds) 아래로 넘친 만큼 위로 올린다 (아래 칩과 다시 겹치지 않게).
+ * 칩 위치는 선택 여부와 상관없이 정해지므로 다른 경로를 골라도 칩이 자리를 바꾸지 않는다.
+ * 범위가 칩을 다 담을 만큼 넓지 않으면 범위 안에 둔 채 겹칠 수 있다 (그때도 선택한 칩이 맨 위에 그려진다).
+ * 칩별 세로 이동량(px)을 돌려준다.
+ */
+export function spreadChips(chips: readonly PlacedChip[], bounds: { top: number; bottom: number }, gap = 4): Record<string, number> {
+  const order = [...chips].sort((a, b) => a.y - b.y || a.id.localeCompare(b.id));
+  const xOverlap = (a: PlacedChip, b: PlacedChip) => a.x - a.halfW < b.x + b.halfW && a.x + a.halfW > b.x - b.halfW;
+  const ys: number[] = order.map((c) => c.y);
+
+  for (let i = 0; i < order.length; i++) {
+    const chip = order[i]!;
+    for (let j = 0; j < i; j++) {
+      const prev = order[j]!;
+      if (xOverlap(prev, chip)) ys[i] = Math.max(ys[i]!, ys[j]! + prev.halfH + gap + chip.halfH);
+    }
+  }
+  for (let i = order.length - 1; i >= 0; i--) {
+    const chip = order[i]!;
+    let y = Math.min(ys[i]!, bounds.bottom - chip.halfH);
+    for (let j = i + 1; j < order.length; j++) {
+      const next = order[j]!;
+      if (xOverlap(next, chip)) y = Math.min(y, ys[j]! - next.halfH - gap - chip.halfH);
+    }
+    ys[i] = Math.max(y, bounds.top + chip.halfH);
+  }
+
+  const offsets: Record<string, number> = {};
+  order.forEach((chip, i) => {
+    offsets[chip.id] = ys[i]! - chip.y;
+  });
+  return offsets;
+}

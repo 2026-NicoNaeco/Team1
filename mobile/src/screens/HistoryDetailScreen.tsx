@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { FACTOR_ORDER, FACTORS } from '../domain/factors';
-import { RATING_LABEL, formatDateTime, formatDistance, formatMinutes, formatExtra, formatWon, placeLabel } from '../domain/format';
+import {
+  RATING_LABEL,
+  formatDateTime,
+  formatDistance,
+  formatMinutes,
+  formatExtra,
+  formatWon,
+  placeLabel,
+  progressPercent,
+} from '../domain/format';
 import type { FactorCode, Measurement, RecordedFactor } from '../domain/types';
 import { colors, layout, space } from '../design/tokens';
 import type { RootScreenProps } from '../navigation/types';
@@ -97,7 +106,7 @@ export function HistoryDetailScreen({ navigation, route }: RootScreenProps<'Hist
           </Text>
           <BurdenMeter level={record.route.burdenLevel} />
           <Text variant="caption" color={colors.textSecondary}>
-            {record.outcome === 'arrived' ? '끝까지 도착했어요.' : `중간에 끝냈어요 (${Math.round(record.progress * 100)}% 진행).`}{' '}
+            {record.outcome === 'arrived' ? '끝까지 도착했어요.' : `중간에 끝냈어요 (${progressPercent(record.progress)}% 진행).`}{' '}
             {record.chosenWasRecommended ? '맞춤 추천 경로를 골랐어요.' : '맞춤 추천과 다른 경로를 골랐어요.'}
           </Text>
         </Card>

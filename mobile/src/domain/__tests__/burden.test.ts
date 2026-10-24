@@ -1,8 +1,10 @@
 import { BURDEN_LEVEL_THRESHOLDS, computeBurden, exclusiveValue, levelForIndex, plainTurnCount } from '../burden';
+import { FACTORS } from '../factors';
 import { emptyLearned } from '../learning';
+import { assumedWorst } from '../recommend';
 import { createDefaultProfile, resolvePreferences } from '../preferences';
-import type { DriverProfile } from '../types';
-import { NOW, known, makeFactors, unknown } from './fixtures';
+import type { DriverProfile, RouteCandidate, RouteFactors } from '../types';
+import { NOW, known, makeFactors, partial, unknown } from './fixtures';
 
 const prefs = (patch: Partial<DriverProfile> = {}) => resolvePreferences({ ...createDefaultProfile(NOW), ...patch }, emptyLearned());
 
@@ -41,6 +43,38 @@ describe('정보 없음은 0 으로 취급하지 않는다', () => {
 
   it('모든 요소를 확인했으면 missing 이 비어 있다', () => {
     expect(computeBurden(makeFactors(), prefs()).missing).toEqual([]);
+  });
+
+  const accidentPoints = (n: number) => n * FACTORS.ACCIDENT_ZONE.unitLoad * prefs().weights.ACCIDENT_ZONE;
+
+  it('비교할 값이 있으면 "정보 없음"을 그 값으로 계산한다 (0 으로 보지 않는다)', () => {
+    const factors = makeFactors({ ACCIDENT_ZONE: unknown('ACCIDENT_ZONE') });
+    const without = computeBurden(factors, prefs());
+    const withAssume = computeBurden(factors, prefs(), { assumeForMissing: { ACCIDENT_ZONE: 2 } });
+    expect(withAssume.index - without.index).toBeCloseTo(accidentPoints(2));
+    expect(withAssume.missing).toContain('ACCIDENT_ZONE'); // 가정으로 채워도 정보가 없다는 사실은 남는다
+  });
+
+  it('"일부만 확인"은 확인 못 한 비율만큼 가정값을 더한다', () => {
+    const factors = makeFactors({ ACCIDENT_ZONE: partial('ACCIDENT_ZONE', 1) }); // 확인된 구간 50%에서 1곳
+    const result = computeBurden(factors, prefs(), { assumeForMissing: { ACCIDENT_ZONE: 4 } });
+    const base = computeBurden(makeFactors(), prefs());
+    expect(result.index - base.index).toBeCloseTo(accidentPoints(1 + 0.5 * 4));
+  });
+
+  it('정보가 빠진 경로는 그 요소가 확인된 어떤 후보보다도 그 요소에서 유리해지지 않는다', () => {
+    const others: RouteFactors[] = [makeFactors({ ACCIDENT_ZONE: known('ACCIDENT_ZONE', 3) }), makeFactors({ ACCIDENT_ZONE: known('ACCIDENT_ZONE', 1) })];
+    const missing = makeFactors({ ACCIDENT_ZONE: unknown('ACCIDENT_ZONE') });
+    const assume = assumedWorst([...others, missing].map((factors) => ({ factors }) as RouteCandidate));
+    const missingIndex = computeBurden(missing, prefs(), { assumeForMissing: assume }).index;
+    for (const f of others) {
+      expect(missingIndex).toBeGreaterThanOrEqual(computeBurden(f, prefs(), { assumeForMissing: assume }).index);
+    }
+  });
+
+  it('어느 후보에서도 확인되지 않은 요소는 가정하지 않는다 (서로 비교할 근거가 없다)', () => {
+    const all = [makeFactors({ ACCIDENT_ZONE: unknown('ACCIDENT_ZONE') }), makeFactors({ ACCIDENT_ZONE: unknown('ACCIDENT_ZONE') })];
+    expect(assumedWorst(all.map((factors) => ({ factors }) as RouteCandidate)).ACCIDENT_ZONE).toBeUndefined();
   });
 });
 

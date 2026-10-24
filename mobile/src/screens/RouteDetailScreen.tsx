@@ -171,6 +171,8 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
   const candidate = candidates.find((c) => c.id === routeId);
   const ranked = recommendation?.items.find((i) => i.routeId === routeId);
   const recommended = recommendation?.items.find((i) => i.isRecommended);
+  /** 후보가 이 경로 하나뿐이면 비교한 결과가 아니므로 "맞춤 추천"·"추천한 이유"라고 하지 않는다 */
+  const onlyCandidate = (recommendation?.items.length ?? 0) === 1;
   const recommendedRoute = useMemo(
     () => (recommended ? candidates.find((c) => c.id === recommended.routeId) : undefined),
     [recommended, candidates],
@@ -218,7 +220,8 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
           </View>
           {ranked.isRecommended || !ranked.withinTimeLimit ? (
             <View style={styles.badges}>
-              {ranked.isRecommended ? <RecommendBadge /> : null}
+              {ranked.isRecommended && !onlyCandidate ? <RecommendBadge /> : null}
+              {onlyCandidate ? <StatusPill label="유일한 경로" tone="neutral" /> : null}
               {!ranked.withinTimeLimit ? <StatusPill label="허용 시간 초과" tone="caution" /> : null}
             </View>
           ) : null}
@@ -231,7 +234,7 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
           <Text variant="caption" color={colors.textSecondary}>
             {formatDistance(candidate.distanceM)} · {toll}
           </Text>
-          <BurdenMeter level={ranked.burdenLevel} />
+          <BurdenMeter level={ranked.burdenLevel} mayBeHigher={ranked.burdenMayBeHigher} />
           {ranked.burdenDrivers.length > 0 ? (
             <Text variant="caption" color={colors.textSecondary}>
               주된 요소: {ranked.burdenDrivers.map((d) => d.text).join(' · ')}
@@ -245,11 +248,18 @@ export function RouteDetailScreen({ navigation, route: navRoute }: RootScreenPro
           ) : null}
         </Card>
 
-        <Section title={ranked.isRecommended ? '이 경로를 추천한 이유' : '이 경로의 특징'}>
+        <Section title={ranked.isRecommended && !onlyCandidate ? '이 경로를 추천한 이유' : '이 경로의 특징'}>
           {ranked.reasons.map((reason) => (
             <View key={reason.id} style={styles.reason}>
               <View style={styles.reasonRow}>
-                <Icon name="check" size={18} color={colors.primary} strokeWidth={3.2} />
+                {/* ✓ 는 다른 경로보다 나은 점에만 쓴다. 중립적인 사실은 회색 점 */}
+                {reason.kind === 'fact' ? (
+                  <View style={styles.factMark}>
+                    <View style={styles.factDot} />
+                  </View>
+                ) : (
+                  <Icon name="check" size={18} color={colors.primary} strokeWidth={3.2} />
+                )}
                 <Text variant="body" style={styles.flex}>
                   {reason.text}
                 </Text>
@@ -347,6 +357,8 @@ const styles = StyleSheet.create({
   sectionHead: { gap: space.xs },
   reason: { gap: 2 },
   reasonRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
+  factMark: { width: 18, height: 24, alignItems: 'center', justifyContent: 'center' },
+  factDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textTertiary },
   relates: { marginLeft: 26 },
   tradeoff: {
     flexDirection: 'row',
