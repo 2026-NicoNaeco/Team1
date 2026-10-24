@@ -10,7 +10,7 @@ React Native + Expo + TypeScript 로 만들었습니다. 이 저장소에서 확
 > '운전 부담이 낮음'은 안전하거나 사고가 없다는 뜻이 아닙니다. 앱은 안전 점수를 만들지 않습니다.
 > 화면마다 '데모' 표시를 붙이지 않고, 아래 `시연 안내 지점` 에서만 알립니다(9장).
 
-이 폴더(`mobile/`)는 저장소 루트의 백엔드(FastAPI, `app/`)와 **독립적으로** 동작합니다. 서버·API 키·로그인이 필요 없습니다.
+이 폴더(`mobile/`)는 백엔드(FastAPI, `backend/`)와 **독립적으로** 동작합니다. 서버·API 키·로그인이 필요 없습니다.
 
 ---
 
@@ -149,31 +149,33 @@ mobile/
 
 ### 백엔드(`/v1/*`)와의 연결
 
-저장소 루트 `README.md` 의 API 를 기준으로 한 매핑 초안입니다. **이번 데모에서는 호출하지 않았고**, 아래 항목은 연결 전에 팀이 정의를 맞춰야 합니다.
+`backend/README.md` 의 API 를 기준으로 한 매핑입니다. 백엔드는 이 앱의 도메인 정의(`domain/types.ts`, `domain/factors.ts`)에 맞춰져 있어서
+**필드 이름(snake_case → camelCase)만 바꾸면** 됩니다. **이번 데모에서는 아직 호출하지 않습니다.**
 
 | 앱 | 백엔드 | 메모 |
 |---|---|---|
-| `PlaceSearchProvider.search` | `GET /v1/places/search` | 503 `PLACE_SEARCH_UNAVAILABLE` 은 검색 오류 상태(다시 시도)로 이어집니다. |
-| `RouteProvider.findRoutes` | `POST /v1/routes/search` | `origin/destination/profile/max_routes`. 응답의 `polyline`(precision 5)을 디코딩해 `GeoPoint[]` 로 바꿉니다. |
+| `PlaceSearchProvider.search` | `GET /v1/places/search` | `category` 는 앱의 `PlaceCategory` 값 그대로입니다. `lat`/`lng` 를 `location` 으로 묶습니다. 503 `PLACE_SEARCH_UNAVAILABLE` 은 검색 오류 상태(다시 시도)로 이어집니다. |
+| `RouteProvider.findRoutes` | `POST /v1/routes/search` | `origin/destination/profile/max_routes`. 응답의 `polyline`(precision 5)을 디코딩해 `path: GeoPoint[]` 로 바꿉니다. `excluded` 도 같은 모양으로 옵니다(지금은 항상 빈 배열). |
+| `RouteCandidate` | `routes[]` | `route_id`→`id`, `label`, `via`, `distance_m`→`distanceM`, `duration_s`→`durationS`, `toll`(지금은 항상 `unknown`), `factors`, `steps` |
+| `RouteFactors` (`Measurement`) | `routes[].factors` | 모든 요소가 옵니다. `availability`·`value`·`unit`·`coverage`·`source`·`verification` 필드 이름까지 같습니다. |
+| `GuidanceStep` | `routes[].steps[]` | `lat`/`lng`→`point`, `road_name`→`roadName`(이름 없는 도로는 `null` 이니 빈 문자열로), `road_class`→`roadClass`(대문자 → 소문자), `offset_m`→`offsetM`, `distance_m`→`lengthM`, `duration_s`→`durationS`, `turn_angle_deg`→`turnAngleDeg`, `unknown_factors`→`unknownFactors`. `maneuver`(`MERGE`/`DIVERGE` 포함)·`instruction`·`factors` 는 그대로입니다. |
 | 오류 | `OUT_OF_SERVICE_AREA`, `SAME_LOCATION`, `ROUTE_NOT_FOUND` | `RouteProviderError` 코드(`UNSUPPORTED`, `SAME_LOCATION`…)나 '후보 0개'로 변환합니다. |
-| 선호 | `profile.road_preference` / `hard_factors` / `easy_factors` / `weights` | 앱의 `roadTypePreference`(`highway`·`general`·`none`)는 `HIGHWAY`·`LOCAL`·`NONE`. 요소별 `relaxed·normal·avoid` 와 모의 학습 값은 `weights`(0~5)로 보내면 됩니다. |
+| 선호 | `profile.road_preference` / `hard_factors` / `easy_factors` / `weights` | 앱의 `roadTypePreference`(`highway`·`general`·`none`)는 `HIGHWAY`·`LOCAL`·`NONE`. 요소별 `relaxed·normal·avoid` 와 모의 학습 값은 `weights`(0~5)로 보내면 됩니다. 15개 요소 코드를 모두 받습니다. |
 | 허용 추가 시간 | `extra_duration_s` | 앱이 이 값으로 허용 시간을 판단합니다(서버가 계산). |
-| 안내 단계 | `steps[]` (`maneuver`, `turn_angle_deg`, `distance_m`, `duration_s`, `factors`) | 부호 규칙(양수=우회전)이 같습니다. 앱의 `MERGE`/`DIVERGE` 안내는 백엔드에 없습니다. |
 | 회피 재탐색 | `POST /v1/routes/reroute` | 데모에는 경로 이탈이 없어 쓰지 않았습니다. |
 | 기록 분석 | `POST /v1/profile/analyze` | 앱의 모의 개인화(`domain/learning.ts`)를 대체할 후보입니다. 백엔드는 실제 주행의 `encountered/deviations/hesitations` 를 받는 반면, 앱은 사용자가 직접 남긴 평가만 씁니다. |
 
-**요소 코드 대응과 정의 차이** (`domain/factors.ts` 의 `backendCode`)
+**요소 코드 대응** (`domain/factors.ts` 의 `backendCode`)
 
-| 앱 요소 | 백엔드 코드 | 확인할 점 |
-|---|---|---|
-| `TRAFFIC_LIGHT`, `PROTECTED_ZONE`, `ROUNDABOUT`, `ACCIDENT_ZONE` | 같은 이름 | 백엔드는 0 과 '정보 없음'을 구분하지 않습니다. 앱은 구분해서 보여주므로 `unknown` 을 표현할 방법이 필요합니다. |
-| `NARROW_ROAD`, `UNPAVED_ROAD` | 같은 이름 | 앱은 **km** 로 보여줍니다. 백엔드의 `count` 단위(구간 수 vs 길이)를 확인해야 합니다. |
-| `TURN_COUNT` | `TURN_COUNT` | 앱은 **전체** 회전 횟수이고 비보호 좌회전·유턴은 그 일부입니다. 백엔드는 `U_TURN`·`SHARP_TURN` 이 일어날 때 `TURN_COUNT` 도 함께 1 씩 더하므로, 점수에 합칠 때 **이중 계산**을 피해야 합니다. |
-| `U_TURN` | `U_TURN` | 같은 뜻입니다. |
-| `SHARP_TURN` | `SHARP_TURN` | **뜻이 다릅니다.** 앱은 '급커브 구간', 백엔드는 '100° 이상 회전(교차로)' 입니다. |
-| `MERGE_DIVERGE`, `LANE_CHANGE`, `TRAFFIC_VOLUME` | `LANE_CHANGE_TRAFFIC` 하나 | 백엔드는 합류·분기·차로 변경·교통량을 한 요소로 묶습니다. 앱은 세 가지를 따로 보여줍니다. |
-| `UNPROTECTED_LEFT`, `LANE_COUNT`, `ROAD_TYPE` | 없음 | 도로 데이터에 필요한 속성입니다. 없으면 '정보 없음' 으로 보여줍니다. |
-| 통행료 | 없음 | `TollInfo` 를 `unknown` 으로 두면 '통행료 정보 없음' 으로 보입니다. |
+15개 요소의 코드·단위·뜻이 백엔드와 같습니다. 백엔드도 `TURN_COUNT` 를 전체 회전 수로 세고 `UNPROTECTED_LEFT`·`U_TURN` 을
+그 일부로 함께 세므로, 앱의 이중 계산 방지 규칙(전체 − 부분집합)을 그대로 쓰면 됩니다. 남은 차이는 아래뿐입니다.
+
+| 항목 | 확인할 점 |
+|---|---|
+| `LANE_COUNT`, `ROAD_TYPE` | 백엔드도 점수에 쓰지 않는 참고 정보입니다. 도로 유형 선호는 `road_preference` 로 반영합니다. |
+| 정보 없음 | 도로망 자료에 속성이 없는 구간은 `unknown`/`partial` 로 옵니다. 개발용 샘플 도로망은 `LANE_CHANGE` 를 일부러 비워 둡니다. |
+| 통행료 | 자료가 없어 항상 `{ availability: 'unknown' }` 입니다. |
+| 좌표 | 백엔드 샘플 도로망은 광주 일대입니다. 데모 지도의 가상 도시(위·경도 0,0 부근)를 보내면 `OUT_OF_SERVICE_AREA` 가 납니다. |
 
 ---
 

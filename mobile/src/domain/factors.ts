@@ -34,7 +34,7 @@ export interface FactorInfo {
   /** 운전 빈도가 적을 때 기본값을 조금 올리는 "복잡한 조작" 요소 */
   complex: boolean;
   icon: string;
-  /** 백엔드 FactorCode 와의 대응 (README 참고) */
+  /** 백엔드 FactorCode 와의 대응. 지금은 모든 요소가 같은 코드다 (README 5장) */
   backendCode?: string;
 }
 
@@ -74,6 +74,7 @@ const INFO: FactorInfo[] = [
     burdenSentence: '비보호 좌회전은 피하고 싶어요.',
     complex: true,
     icon: 'turn-left',
+    backendCode: 'UNPROTECTED_LEFT',
   },
   {
     code: 'U_TURN',
@@ -132,7 +133,7 @@ const INFO: FactorInfo[] = [
     burdenSentence: '차로를 여러 번 바꾸는 게 어려워요.',
     complex: true,
     icon: 'lane-change',
-    backendCode: 'LANE_CHANGE_TRAFFIC',
+    backendCode: 'LANE_CHANGE',
   },
   {
     code: 'MERGE_DIVERGE',
@@ -147,7 +148,7 @@ const INFO: FactorInfo[] = [
     burdenSentence: '합류·분기 구간(고속도로 진입·진출 등)이 부담돼요.',
     complex: true,
     icon: 'merge',
-    backendCode: 'LANE_CHANGE_TRAFFIC',
+    backendCode: 'MERGE_DIVERGE',
   },
   {
     code: 'LANE_COUNT',
@@ -161,6 +162,7 @@ const INFO: FactorInfo[] = [
     description: '주로 지나는 도로의 편도 차로 수예요. 차로 변경 횟수와는 별개의 참고 정보예요.',
     complex: false,
     icon: 'lanes',
+    backendCode: 'LANE_COUNT',
   },
   {
     code: 'NARROW_ROAD',
@@ -203,6 +205,7 @@ const INFO: FactorInfo[] = [
     description: '고속도로를 지나는 길이예요. 좋고 나쁨이 아니라 선호에 따라 평가가 달라져요.',
     complex: false,
     icon: 'highway',
+    backendCode: 'ROAD_TYPE',
   },
   {
     code: 'TRAFFIC_LIGHT',
@@ -232,7 +235,7 @@ const INFO: FactorInfo[] = [
     burdenSentence: '차가 많이 막히는 길은 부담돼요.',
     complex: false,
     icon: 'traffic',
-    backendCode: 'LANE_CHANGE_TRAFFIC',
+    backendCode: 'TRAFFIC_VOLUME',
   },
   {
     code: 'PROTECTED_ZONE',

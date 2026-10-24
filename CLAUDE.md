@@ -4,18 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-쉬운 길 지도 (easy-route-api): a **stateless** FastAPI server that finds routes that are easy for beginner drivers. No users are stored. The app sends the preference profile with every request. `README.md` is the API contract for the frontend, covering endpoints, step fields, reroute semantics, and error codes. Keep it in sync when behaviour changes.
+쉬운 길 지도: a beginner-driver navigation service. The repo has two parts:
+- `backend/` (easy-route-api): a **stateless** FastAPI server that finds routes that are easy for beginner drivers. No users are stored. The app sends the preference profile with every request. `backend/README.md` is the API contract for the frontend, covering endpoints, factor codes, measurement and step fields, reroute semantics, and error codes. Keep it in sync when behaviour changes.
+- `mobile/`: the app front end (see "Mobile app" at the end).
+
+The root `README.md` only describes the project, the folder layout and the branching strategy.
 
 `Yolo_detection.py`, `Sample.zip` and `파일구조예시` are left over from an earlier project topic (crowd density) and are not part of this app.
 
-The repo also holds the app front end in `mobile/` (React Native + Expo, a self-contained demo that does not call this backend). See "Mobile app" at the end. Everything above and the Commands/Architecture sections below describe the Python backend only.
+The Commands and Architecture sections below describe the Python backend only. All backend paths are relative to `backend/`.
 
 ## Commands
 
 ```bash
+cd backend                                 # every backend command runs here; `.env` lives here too
 pip install -r requirements-dev.txt        # Python 3.11+ (CI and Docker use 3.13)
 uvicorn app.main:app --reload              # http://localhost:8000/docs
-pytest                                     # CI runs `pytest -q` on PRs/pushes to develop and main
+pytest                                     # CI runs `pytest -q` in backend/ on PRs/pushes to develop and main
 pytest tests/test_routing.py::test_hard_factor_avoids_narrow_road   # single test
 docker compose up --build                  # full stack with PostGIS + Redis
 ```
@@ -42,9 +47,20 @@ The tests use the `settings` fixture in `tests/conftest.py`, which disables all 
 - `avoid_path` is a **coordinate sequence, not edge ids**, and it is a cost penalty (5×), not a ban. If the avoided road is the only connection, it must still be returned.
 - `extra_duration_s` is computed in `RouteService` by calling the finder again with `Profile.fastest()` (all weights 0), **without** `avoid_path`.
 - `Route.steps` may be empty. Use `routing.steps.build_steps(path, start_heading_deg)` to generate turn-by-turn steps.
+- `Route.measurements` may be empty, but then every factor is reported as `known`, so "no data" is lost. Use `routing.measure.measure_route(...)` on the same edge path.
 - Raise `OutOfServiceArea` / `SameLocation` / `NoRouteFound` (`routing/errors.py`). `api/errors.py` maps them to HTTP codes.
 
-**Cost model** (`routing/cost.py`): cost = travel time × road-preference factor + difficulty points × `POINT_SECONDS` (15 s). Points = Σ count × `FactorMeta.base_penalty` × `Profile.weight(code)`. Each difficulty factor in `domain/factors.py` is either `EDGE` (a property of the road segment) or `TURN` (charged on the transition between edges). The turn-angle thresholds (30°/100°/165°) are shared between cost and step generation. A reversal onto the same edge always counts as a U-turn. Moving within a roundabout is not counted as a turn.
+**Factors match the front end.** The 15 codes in `domain/factors.py` have the same names, units and meanings as `mobile/src/domain/factors.ts`; change both together. Each factor has a kind:
+- `EDGE`: a road-segment property summed per edge, as a count or as km (`NARROW_ROAD`, `UNPAVED_ROAD`, `TRAFFIC_VOLUME`, `ROAD_TYPE` are km).
+- `ZONE`: `PROTECTED_ZONE`, `ACCIDENT_ZONE`, `ROUNDABOUT`. Consecutive flagged edges are one place, counted once on entry.
+- `TURN`: charged on the transition between edges. `TURN_COUNT` is the total; `UNPROTECTED_LEFT` and `U_TURN` are subsets counted alongside it.
+- `INFO`: `LANE_COUNT`. Like `ROAD_TYPE`, it has `base_penalty` 0 and is never scored.
+
+`SHARP_TURN` is a road-curve section (edge attribute `sharp_curves`), not a ≥100° turn. Entering or leaving a `HIGHWAY` edge is `MERGE_DIVERGE` (step maneuver `MERGE`/`DIVERGE`) and is not a `TURN_COUNT`.
+
+**Cost model** (`routing/cost.py`): cost = travel time × road-preference factor + difficulty points × `POINT_SECONDS` (15 s). Points = Σ amount × `FactorMeta.base_penalty` × `Profile.weight(code)`, where amount is a count or km. `cost.transition(prev, nxt)` is the single place that decides transition factors (zone entry, turns, unprotected left, merge/diverge). Search cost, route totals, steps and measurements all call it, so they cannot disagree. The turn-angle thresholds (30°/100°/165°) are shared between cost and step generation. A reversal onto the same edge always counts as a U-turn. Moving within a roundabout is not counted as a turn.
+
+**Measurements** (`routing/measure.py`): every route factor is reported as `known` / `partial` / `unknown`, with `coverage`, the graph's `source` and `verification`. Edge data is "known" only if its JSON key is present (`graph._KNOWN_KEYS`), so **a missing key means no data, not 0**. Turn counts are always known. `UNPROTECTED_LEFT` coverage is the share of left turns whose approach edge has `unprotected_left`.
 
 **Profile weights** (`domain/models.py`): explicit `weights` take priority, then `hard_factors` (1.5), then `easy_factors` (0.5), otherwise 1.0. `/v1/profile/analyze` (`services/profile_analyzer.py`) returns updated weights and stores nothing.
 
@@ -74,7 +90,7 @@ Run `npm run typecheck` and `npm test` after changes. Expo SDK 57 / RN 0.86 / Re
 Invariants that are easy to break:
 - **Road characteristics and recommendations are separate.** `RouteProvider` returns only candidates and per-factor measurements; ranking, reasons and trade-offs come from `RecommendationService`. A recommendation carries the preference `signature` it was computed with, and `tripStore` discards stale responses (new search, changed settings). Never show routes or reasons from before a search or settings change.
 - **Every measurement is `known` / `partial` / `unknown`** (with source and verification). "0회" and "정보 없음" are different, and missing accident-zone data must never read as safe. Mock values are labelled as such.
-- **Turn factors are counted exclusively.** `TURN_COUNT` is the total; `UNPROTECTED_LEFT` and `U_TURN` are subsets; burden scoring uses plain turns = total − subsets. `SHARP_TURN` means a road-curve section, `MERGE_DIVERGE` and `LANE_CHANGE` are separate. This differs from the backend's `SHARP_TURN`/`LANE_CHANGE_TRAFFIC` (see the mapping table in `mobile/README.md`).
+- **Turn factors are counted exclusively.** `TURN_COUNT` is the total; `UNPROTECTED_LEFT` and `U_TURN` are subsets; burden scoring uses plain turns = total − subsets. `SHARP_TURN` means a road-curve section, `MERGE_DIVERGE` and `LANE_CHANGE` are separate. The backend uses the same codes and definitions (mapping table in `mobile/README.md` §5).
 - **Preference priority:** user-set value > mock-learned adjustment (only with consent, only for factors the user did not set) > default. Never silently relax a hard condition; explain it and let the user change it.
 - **Copy rules:** never claim safety ("안전", "사고 없는 길"); show 낮음/보통/높음 plus concrete reasons, never a safety score. Everyday screens use product wording (주행, 경로, 기록) and carry no "데모" badges, but the data is fake, so keep the **disclosure points** listed in `mobile/README.md` §9: the welcome footnote, the "시연용 안내예요" sheet the first time guidance starts in a session (the simulator waits until it is acknowledged), the always-visible "시연 중 · 실제 도로 안내가 아니에요" pill on the guidance screen, the tiny "시연용 지도" map label, the search footnote, and Settings → 앱 정보 → 시연 안내. Do not remove them.
 - **Dev tools are hidden:** Settings → 앱 정보 → tap the version row 7 times (per session) to reveal 개발용 시나리오. The QA flows rely on this and on `testID`s, so keep both stable.
