@@ -229,7 +229,8 @@ export function NavigationScreen({ navigation, route: navRoute }: RootScreenProp
                   <ManeuverIcon maneuver={then.maneuver} size={20} color={colors.onPrimary} strokeWidth={6} />
                   <NavText variant="captionStrong" color={colors.onPrimary} style={styles.thenText} numberOfLines={1}>
                     {MANEUVER_LABEL[then.maneuver]}
-                    {then.maneuver !== 'ARRIVE' ? ` · ${then.roadName}` : ''}
+                    {/* 이름 없는 도로(빈 문자열)는 도로명 없이 동작만 보여 준다 */}
+                    {then.maneuver !== 'ARRIVE' && then.roadName ? ` · ${then.roadName}` : ''}
                   </NavText>
                 </View>
               ) : null}

@@ -52,7 +52,12 @@ export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
   const destination = useTripStore((s) => s.destination);
   const setDestination = useTripStore((s) => s.setDestination);
   const profile = useAppStore((s) => s.profile);
-  const recents = useAppStore((s) => s.recents);
+  const storedRecents = useAppStore((s) => s.recents);
+  // 다른 데이터(예: 데모 도시)로 저장된 최근 목적지는 지금 제공자로 경로를 찾을 수 없으니 보여 주지 않는다
+  const recents = useMemo(() => {
+    const places = getServices().places;
+    return places.isServiceable ? storedRecents.filter((p) => places.isServiceable!(p)) : storedRecents;
+  }, [storedRecents]);
   const persistenceError = useAppStore((s) => s.persistence.status === 'error');
   const retryPersist = useAppStore((s) => s.retryPersist);
   const discarded = useAppStore((s) => s.discardedOnLoad);

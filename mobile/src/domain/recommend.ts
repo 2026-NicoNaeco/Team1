@@ -57,10 +57,19 @@ interface Entry {
   withinTimeLimit: boolean;
 }
 
+export interface RecommendOptions {
+  /**
+   * 출발지·목적지 사이 실제 최단 시간(초). 경로 제공자가 성향을 반영해 후보를 고르면
+   * 가장 빠른 길이 후보에 없을 수 있어서, 추가 시간은 이 값을 기준으로 계산한다. 없으면 후보 중 가장 빠른 길이 기준이다.
+   */
+  fastestDurationS?: number;
+}
+
 export function recommend(
   candidates: readonly RouteCandidate[],
   prefs: EffectivePreferences,
   excluded: readonly ExcludedRoute[] = [],
+  options: RecommendOptions = {},
 ): RecommendationResult {
   if (candidates.length === 0) {
     return {
@@ -75,7 +84,13 @@ export function recommend(
   const fastest = [...candidates].sort(
     (a, b) => a.durationS - b.durationS || a.distanceM - b.distanceM || a.id.localeCompare(b.id),
   )[0]!;
-  const fastestMinutes = minutesFromSeconds(fastest.durationS);
+  const fastestCandidateMinutes = minutesFromSeconds(fastest.durationS);
+  const fastestMinutes =
+    options.fastestDurationS !== undefined
+      ? Math.min(fastestCandidateMinutes, minutesFromSeconds(options.fastestDurationS))
+      : fastestCandidateMinutes;
+  /** 후보 중 가장 빠른 길이 실제로도 가장 빠른 길인지 (아니면 "가장 빠름"이라고 하지 않는다) */
+  const fastestIncluded = fastestCandidateMinutes <= fastestMinutes;
   const minDistanceM = Math.min(...candidates.map((c) => c.distanceM));
   const assumeForMissing = assumedWorst(candidates);
 
@@ -104,12 +119,12 @@ export function recommend(
     return a.score - b.score || a.candidate.durationS - b.candidate.durationS || a.candidate.id.localeCompare(b.candidate.id);
   });
 
-  const headlines = assignHeadlines(candidates, fastest.id);
+  const headlines = assignHeadlines(candidates, fastestIncluded ? fastest.id : null);
   const recommendedId = ordered[0]!.withinTimeLimit ? ordered[0]!.candidate.id : null;
 
   const items: RankedRoute[] = ordered.map((entry, i) => {
     const id = entry.candidate.id;
-    const isFastest = id === fastest.id;
+    const isFastest = fastestIncluded && id === fastest.id;
     return {
       routeId: id,
       rank: i + 1,
@@ -122,7 +137,7 @@ export function recommend(
       burdenDrivers: burdenDrivers(entry),
       hasMissingInfo: entry.burden.missing.length > 0 || entry.candidate.toll.availability === 'unknown',
       headline: headlines.get(id) ?? `${entry.candidate.via} 경유`,
-      reasons: buildReasons(entry, entries, fastest, isFastest, prefs),
+      reasons: buildReasons(entry, entries, fastest, id === fastest.id, isFastest, fastestIncluded, prefs),
       tradeoffs: buildTradeoffs(entry, entries, prefs),
       settingsRelation: buildSettingsRelation(entry, entries, prefs),
     };
@@ -132,8 +147,8 @@ export function recommend(
     items,
     recommendedRouteId: recommendedId,
     preferenceSignature: prefs.signature,
-    fastestRouteId: fastest.id,
-    notices: buildNotices(ordered, recommendedId, prefs, excluded),
+    fastestRouteId: fastestIncluded ? fastest.id : null,
+    notices: buildNotices(ordered, recommendedId, prefs, excluded, fastestIncluded ? null : fastestMinutes),
   };
 }
 
@@ -158,11 +173,11 @@ export function assumedWorst(candidates: readonly RouteCandidate[]): Partial<Rec
  * 경로의 객관적인 특징으로 제목을 붙인다. 사용자 설정과 무관하므로 설정을 바꿔도 제목은 그대로다.
  * 같은 특징이 두 경로에 붙지 않도록 우선순위대로 한 경로에만 배정한다.
  */
-function assignHeadlines(candidates: readonly RouteCandidate[], fastestId: string): Map<string, string> {
+function assignHeadlines(candidates: readonly RouteCandidate[], fastestId: string | null): Map<string, string> {
   const result = new Map<string, string>();
   if (candidates.length < 2) return result;
 
-  result.set(fastestId, '가장 빠른 길');
+  if (fastestId) result.set(fastestId, '가장 빠른 길');
 
   const withHighway = candidates
     .filter((c) => !result.has(c.id) && highwayKm(c.factors) >= 3)
@@ -238,7 +253,12 @@ function buildReasons(
   entry: Entry,
   all: readonly Entry[],
   baseline: RouteCandidate,
+  /** 후보 중 가장 빠른 경로인지 (다른 후보와의 비교 방식을 고른다) */
+  isFastestCandidate: boolean,
+  /** 실제로도 가장 빠른 경로인지 ("가장 빠른 경로예요" 이유) */
   isFastest: boolean,
+  /** 비교 기준(후보 중 가장 빠른 경로)이 실제로도 가장 빠른 길인지. 아니면 "후보 중 가장 빠른 경로"라고 쓴다 */
+  baselineIsFastest: boolean,
   prefs: EffectivePreferences,
 ): ReasonItem[] {
   const c = entry.candidate;
@@ -259,7 +279,7 @@ function buildReasons(
     const relatesTo = { label: info.avoidLabel, source: prefs.weightSources[code] };
     const label = sentenceLabel(code);
 
-    if (!isFastest) {
+    if (!isFastestCandidate) {
       const base = exclusiveValue(baseline.factors, code);
       if (base === null) continue;
       const diff = base - mine;
@@ -272,7 +292,7 @@ function buildReasons(
           id: `fewer:${code}`,
           kind: 'fewer',
           factor: code,
-          text: `빠른 경로보다 ${josa(label, '이/가')} ${formatFactorValue(code, diff)} 적어요`,
+          text: `${baselineIsFastest ? '빠른 경로' : '후보 중 가장 빠른 경로'}보다 ${josa(label, '이/가')} ${formatFactorValue(code, diff)} 적어요`,
           relatesTo,
           impact,
         });
@@ -519,9 +539,21 @@ function buildNotices(
   recommendedId: string | null,
   prefs: EffectivePreferences,
   excluded: readonly ExcludedRoute[],
+  /** 가장 빠른 길이 후보에 없을 때 그 길의 시간(분). 후보에 있으면 null */
+  missingFastestMinutes: number | null,
 ): RecommendationNotice[] {
   const notices: RecommendationNotice[] = [];
   const recommended = ordered.find((e) => e.candidate.id === recommendedId);
+
+  if (missingFastestMinutes !== null) {
+    notices.push({
+      kind: 'fastest_not_included',
+      text:
+        `가장 빠른 길(약 ${formatMinutes(missingFastestMinutes)})은 내 운전 성향을 반영한 후보에 들지 않았어요. ` +
+        `'빠른 경로보다 +N분'은 그 길을 기준으로 한 시간이에요.` +
+        (recommendedId === null ? ` 허용한 추가 시간(+${prefs.maxExtraMinutes}분) 안에 드는 후보가 없어서 맞춤 추천을 정하지 않았어요.` : ''),
+    });
+  }
 
   if (ordered.length === 1) {
     notices.push({ kind: 'single_candidate', text: '이 목적지는 후보가 1개뿐이라 비교할 경로가 없어요.' });

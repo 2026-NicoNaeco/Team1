@@ -223,3 +223,40 @@ describe('정보가 빠진 경로의 부담 표시', () => {
     expect(hidden.candidates.find((c) => c.id === result.recommendedRouteId)?.label).toBe(recommendedLabel(run(profileOf())));
   });
 });
+
+describe('가장 빠른 길이 후보에 없을 때 (성향을 반영해 후보를 고르는 제공자)', () => {
+  const fastestCandidate = [...candidates].sort((a, b) => a.durationS - b.durationS)[0]!;
+  const prefs = () => resolvePreferences(profileOf(), emptyLearned());
+
+  it('최단 시간을 주지 않으면 지금처럼 후보 중 가장 빠른 길이 기준이다', () => {
+    const result = recommend(candidates, prefs(), excluded);
+    expect(result.fastestRouteId).toBe(fastestCandidate.id);
+    expect(result.items.find((i) => i.routeId === fastestCandidate.id)!.extraMinutes).toBe(0);
+    expect(result.notices.some((n) => n.kind === 'fastest_not_included')).toBe(false);
+  });
+
+  it('실제 최단 시간이 더 짧으면 그 길을 기준으로 추가 시간을 계산하고, 어떤 후보도 "가장 빠름"이라 하지 않는다', () => {
+    const fastestDurationS = fastestCandidate.durationS - 5 * 60;
+    const result = recommend(candidates, prefs(), excluded, { fastestDurationS });
+    expect(result.fastestRouteId).toBeNull();
+    for (const item of result.items) {
+      expect(item.extraMinutes).toBeGreaterThanOrEqual(5);
+      expect(item.headline).not.toBe('가장 빠른 길');
+      expect(item.reasons.some((r) => r.kind === 'fastest')).toBe(false);
+    }
+    const notice = result.notices.find((n) => n.kind === 'fastest_not_included');
+    expect(notice?.text).toContain('가장 빠른 길');
+  });
+
+  it('허용 시간 안에 드는 후보가 없으면 추천하지 않고 그 이유를 알린다 (조건을 몰래 완화하지 않는다)', () => {
+    const fastestDurationS = fastestCandidate.durationS - 30 * 60;
+    const result = recommend(candidates, prefs(), excluded, { fastestDurationS });
+    expect(result.recommendedRouteId).toBeNull();
+    expect(result.notices.find((n) => n.kind === 'fastest_not_included')?.text).toContain('맞춤 추천을 정하지 않았어요');
+  });
+
+  it('최단 시간이 후보보다 길게 와도(반올림 등) 후보 중 가장 빠른 길을 기준으로 둔다', () => {
+    const result = recommend(candidates, prefs(), excluded, { fastestDurationS: fastestCandidate.durationS + 120 });
+    expect(result.fastestRouteId).toBe(fastestCandidate.id);
+  });
+});

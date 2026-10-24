@@ -3,6 +3,9 @@ import { DemoPlaceSearchProvider } from '../mock/mockPlaceSearch';
 import { DemoRecommendationService } from '../mock/mockRecommendation';
 import { DemoRouteProvider } from '../mock/mockRouteProvider';
 import { getScenario } from '../mock/scenario';
+import { BackendPlaceSearchProvider } from './backend/BackendPlaceSearchProvider';
+import { BackendRouteProvider } from './backend/BackendRouteProvider';
+import { API_BASE_URL, DATA_SOURCE } from './config';
 import { AsyncStorageRepository } from './repository/AsyncStorageRepository';
 import { FaultInjectingRepository } from './repository/FaultInjectingRepository';
 import type {
@@ -41,10 +44,27 @@ export function createDemoServices(): Services {
   };
 }
 
+/**
+ * 백엔드(/v1)로 장소·경로를 받는 조립. 추천·시뮬레이션·저장은 데모와 같은 구현을 쓴다.
+ * 성향은 경로 요청에 함께 보내고(BackendRouteProvider), 순위·이유는 앱이 만든다.
+ */
+export function createBackendServices(baseUrl: string = API_BASE_URL): Services {
+  return {
+    ...createDemoServices(),
+    places: new BackendPlaceSearchProvider(baseUrl),
+    routes: new BackendRouteProvider(baseUrl),
+  };
+}
+
+/** 설정(services/config.ts 의 EXPO_PUBLIC_DATA_SOURCE)에 따라 고른다. 기본은 데모 */
+export function createServices(): Services {
+  return DATA_SOURCE === 'backend' ? createBackendServices() : createDemoServices();
+}
+
 let current: Services | null = null;
 
 export function getServices(): Services {
-  if (!current) current = createDemoServices();
+  if (!current) current = createServices();
   return current;
 }
 

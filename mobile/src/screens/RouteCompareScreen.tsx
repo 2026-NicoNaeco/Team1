@@ -29,6 +29,7 @@ const NOTICE_TONE: Record<RecommendationNotice['kind'], NoticeTone> = {
   excluded_restricted: 'info',
   single_candidate: 'info',
   missing_info: 'unknown',
+  fastest_not_included: 'info',
 };
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
@@ -300,9 +301,9 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
                       onAction={() => navigation.navigate('Preferences')}
                     />
                   ))}
-                {/* 목록이 왜 이렇게 구성됐는지(제외된 경로, 후보 1개)는 카드보다 먼저 알린다 */}
+                {/* 목록이 왜 이렇게 구성됐는지(제외된 경로, 후보 1개, 가장 빠른 길이 후보에 없음)는 카드보다 먼저 알린다 */}
                 {recommendation.notices
-                  .filter((n) => n.kind === 'excluded_restricted' || n.kind === 'single_candidate')
+                  .filter((n) => n.kind === 'excluded_restricted' || n.kind === 'single_candidate' || n.kind === 'fastest_not_included')
                   .map((notice) => (
                     <Notice key={notice.kind} tone={NOTICE_TONE[notice.kind]} text={notice.text} />
                   ))}

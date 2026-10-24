@@ -166,6 +166,11 @@ export interface ExcludedRoute {
 export interface RouteSearchResult {
   candidates: RouteCandidate[];
   excluded: ExcludedRoute[];
+  /**
+   * 출발지·목적지 사이 실제 최단 시간(초). 성향을 반영해 후보를 고르는 제공자(백엔드)는 가장 빠른 길이 후보에 없을 수 있어
+   * 이 값을 함께 준다. 없으면 후보 중 가장 빠른 길을 기준으로 삼는다.
+   */
+  fastestDurationS?: number;
 }
 
 // ───────────────────────── 사용자 성향 ─────────────────────────
@@ -286,7 +291,7 @@ export interface RankedRoute {
 }
 
 export interface RecommendationNotice {
-  kind: 'over_limit' | 'excluded_restricted' | 'single_candidate' | 'missing_info';
+  kind: 'over_limit' | 'excluded_restricted' | 'single_candidate' | 'missing_info' | 'fastest_not_included';
   text: string;
   /** over_limit 일 때 제외된 경로 id */
   routeIds?: string[];

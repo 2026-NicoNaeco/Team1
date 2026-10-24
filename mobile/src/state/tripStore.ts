@@ -16,6 +16,7 @@ import { useAppStore } from './appStore';
  * 지금 계획 중인 이동: 출발지·목적지, 조회한 경로 후보, 추천 결과, 선택한 경로.
  *
  * - 도로 특성(candidates)과 추천 결과(recommendation)는 따로 보관한다. 설정이 바뀌면 후보는 그대로 두고 추천만 다시 계산한다.
+ *   단, 후보 자체가 성향에 따라 달라지는 제공자(백엔드, candidatesDependOnPreferences)면 후보를 다시 받아 온다.
  * - 새 검색(출발지·목적지 변경)은 이전 후보·추천·선택을 즉시 지우고, 오래된 응답은 요청 번호로 버린다.
  */
 
@@ -47,6 +48,10 @@ interface TripState {
   error: TripError | null;
   candidates: RouteCandidate[];
   excluded: ExcludedRoute[];
+  /** 실제 최단 시간(초). 제공자가 알려 준 경우에만 있다 */
+  fastestDurationS: number | undefined;
+  /** 후보를 받아 올 때 쓴 성향의 signature */
+  fetchedSignature: string | null;
   recommendation: RecommendationResult | null;
   selectedRouteId: string | null;
   /** auto: 추천 경로를 따라감 / manual: 사용자가 직접 고름 (설정이 바뀌어도 유지) */
@@ -56,7 +61,8 @@ interface TripState {
 
   setOrigin: (place: Place) => void;
   setDestination: (place: Place) => void;
-  loadRoutes: () => Promise<void>;
+  /** notice 가 있으면 다시 받아 온 이유로 알린다 (예: 설정 변경) */
+  loadRoutes: (notice?: string) => Promise<void>;
   selectRoute: (id: string) => void;
   refreshRecommendation: () => Promise<void>;
   clearRecomputeNotice: () => void;
@@ -70,6 +76,8 @@ const clearedResult = {
   error: null,
   candidates: [] as RouteCandidate[],
   excluded: [] as ExcludedRoute[],
+  fastestDurationS: undefined as number | undefined,
+  fetchedSignature: null as string | null,
   recommendation: null,
   selectedRouteId: null,
   selectionMode: 'auto' as const,
@@ -108,7 +116,7 @@ export const useTripStore = create<TripState>()((set, get) => ({
     useAppStore.getState().addRecent(place);
   },
 
-  loadRoutes: async () => {
+  loadRoutes: async (notice?: string) => {
     const { origin, destination } = get();
     if (!destination) return;
     controller?.abort();
@@ -118,26 +126,31 @@ export const useTripStore = create<TripState>()((set, get) => ({
     set({ ...clearedResult, status: 'loading' });
 
     const services = getServices();
+    const preferences = currentPreferences();
     try {
-      const result = await services.routes.findRoutes(origin, destination, { signal: ctrl.signal });
+      const result = await services.routes.findRoutes(origin, destination, { signal: ctrl.signal, preferences });
       if (seq !== requestSeq) return;
       if (result.candidates.length === 0) {
-        set({ status: 'empty', excluded: result.excluded });
+        set({ status: 'empty', excluded: result.excluded, fetchedSignature: preferences.signature });
         return;
       }
       const recommendation = await services.recommendation.recommend({
         candidates: result.candidates,
-        preferences: currentPreferences(),
+        preferences,
         excluded: result.excluded,
+        fastestDurationS: result.fastestDurationS,
       });
       if (seq !== requestSeq) return;
       set({
         status: 'ready',
         candidates: result.candidates,
         excluded: result.excluded,
+        fastestDurationS: result.fastestDurationS,
+        fetchedSignature: preferences.signature,
         recommendation,
         selectedRouteId: recommendation.recommendedRouteId,
         selectionMode: 'auto',
+        recomputeNotice: notice ?? null,
       });
     } catch (error) {
       if (seq !== requestSeq || isAbort(error)) return;
@@ -155,13 +168,23 @@ export const useTripStore = create<TripState>()((set, get) => ({
   },
 
   refreshRecommendation: async () => {
-    const { status, candidates, excluded, recommendation } = get();
-    if (status !== 'ready') return;
+    const { status, candidates, excluded, recommendation, fastestDurationS, fetchedSignature, destination } = get();
     const preferences = currentPreferences();
+    const services = getServices();
+
+    // 후보가 성향에 따라 달라지는 제공자면, 다른 성향으로 받아 둔 후보는 버리고 다시 받아 온다
+    if (services.routes.candidatesDependOnPreferences) {
+      if (!destination || status === 'idle' || status === 'loading') return;
+      if (fetchedSignature === preferences.signature) return;
+      await get().loadRoutes('설정이 바뀌어 경로를 다시 찾았어요.');
+      return;
+    }
+
+    if (status !== 'ready') return;
     if (recommendation?.preferenceSignature === preferences.signature) return;
 
     const seq = ++recommendSeq;
-    const next = await getServices().recommendation.recommend({ candidates, preferences, excluded });
+    const next = await services.recommendation.recommend({ candidates, preferences, excluded, fastestDurationS });
     // 그 사이 새 검색이 시작됐거나 다른 재계산이 끝났다면 이 결과는 버린다
     if (seq !== recommendSeq || get().candidates !== candidates) return;
 
