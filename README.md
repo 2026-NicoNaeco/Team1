@@ -5,6 +5,7 @@
 ## 구조
 
 ```
+algorithm/ 쉬운 길 라우팅 알고리즘 엔진 및 도로망 샘플 데이터. 설명은 algorithm/README.md
 backend/   경로 계산 서버 (FastAPI). 실행법·API 명세는 backend/README.md
 mobile/    모바일 앱 (React Native + Expo). 실행법은 mobile/README.md
 ```
