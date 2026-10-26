@@ -4,6 +4,7 @@ import httpx
 from fastapi import Request
 
 from app.config import Settings
+from app.domain.models import ServiceArea
 from app.services.cache import Cache
 from app.services.hotspots import HotspotRepository
 from app.services.places import PlaceSearchService
@@ -18,6 +19,7 @@ class Container:
     hotspot_repository: HotspotRepository
     cache: Cache
     http_client: httpx.AsyncClient
+    service_area: ServiceArea
 
 
 def get_container(request: Request) -> Container:
@@ -38,3 +40,7 @@ def get_place_service(request: Request) -> PlaceSearchService:
 
 def get_hotspot_repository(request: Request) -> HotspotRepository:
     return get_container(request).hotspot_repository
+
+
+def get_service_area(request: Request) -> ServiceArea:
+    return get_container(request).service_area

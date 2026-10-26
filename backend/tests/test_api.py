@@ -37,7 +37,9 @@ def test_route_search_matches_frontend_shape(client):
     body = resp.json()
     assert body["excluded"] == []
     routes = body["routes"]
-    assert [r["label"] for r in routes] == ["A", "B", "C"][: len(routes)]
+    # 식별 글자는 FE 처럼 소요 시간 순서다 (A 가 가장 빠름). 목록 자체는 rank 순서
+    by_time = sorted(routes, key=lambda r: (r["duration_s"], r["distance_m"]))
+    assert [r["label"] for r in by_time] == ["A", "B", "C"][: len(routes)]
     for r in routes:
         assert r["via"]
         assert r["toll"] == {"availability": "unknown"}
@@ -300,3 +302,16 @@ def test_places_search(client):
 def test_places_requires_both_coordinates(client):
     resp = client.get("/v1/places/search", params={"q": "광주시청", "lat": 35.16})
     assert resp.status_code == 422
+
+
+def test_service_area(client):
+    """FE 는 이 영역 안에서 기본 출발지·지도 첫 화면을 잡아야 OUT_OF_SERVICE_AREA 가 나지 않는다."""
+    body = client.get("/v1/service-area").json()
+    min_lng, min_lat, max_lng, max_lat = body["bbox"]
+    assert min_lng < max_lng and min_lat < max_lat
+    center = body["center"]
+    assert min_lat <= center["lat"] <= max_lat and min_lng <= center["lng"] <= max_lng
+    assert body["source"]["kind"] == "demo_sample"
+    # 중심점은 도로 위 지점이라 그대로 출발지로 쓸 수 있다
+    resp = client.post("/v1/routes/search", json={"origin": center, "destination": DESTINATION})
+    assert resp.status_code == 200

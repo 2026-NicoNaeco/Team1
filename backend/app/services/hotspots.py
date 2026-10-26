@@ -6,6 +6,7 @@ DATABASE_URL 이 있으면 PostGIS 의 hotspots 테이블(db/init.sql)을 조회
 정적 지점에 포함되지 않는다.
 """
 
+import logging
 from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Protocol
@@ -15,6 +16,8 @@ import asyncpg
 from app.domain.factors import FACTORS, FactorCode, FactorKind
 from app.routing.geo import midpoint
 from app.routing.graph import RoadGraph
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -121,10 +124,16 @@ class PostgisHotspotRepository:
             [str(c) for c in codes] if codes is not None else None,
             limit,
         )
-        return [
-            HotspotRecord(r["id"], FactorCode(r["code"]), r["lat"], r["lng"], r["note"] or "")
-            for r in rows
-        ]
+        records = []
+        for r in rows:
+            try:
+                code = FactorCode(r["code"])
+            except ValueError:
+                # 요소 코드가 바뀌기 전에 적재한 행(예: LANE_CHANGE_TRAFFIC) 하나 때문에 조회 전체가 실패하지 않게 한다
+                logger.warning("unknown hotspot code %r (id=%s) skipped", r["code"], r["id"])
+                continue
+            records.append(HotspotRecord(r["id"], code, r["lat"], r["lng"], r["note"] or ""))
+        return records
 
     async def close(self) -> None:
         await self._pool.close()

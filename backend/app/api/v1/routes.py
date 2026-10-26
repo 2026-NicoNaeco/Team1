@@ -58,7 +58,7 @@ def search_routes(
     ranked = service.search(
         body.origin.to_point(), body.destination.to_point(), body.profile.to_domain(), body.max_routes
     )
-    return RouteSearchResponse(routes=[_to_out(r) for r in ranked], excluded=[])
+    return _response(ranked)
 
 
 @router.post("/reroute", response_model=RouteSearchResponse, responses=ERROR_RESPONSES, summary="경로 이탈 시 재탐색")
@@ -75,7 +75,7 @@ def reroute(
         start_heading_deg=body.heading_deg,
         avoid_path=_decode_avoid_path(body.previous_polyline),
     )
-    return RouteSearchResponse(routes=[_to_out(r) for r in ranked], excluded=[])
+    return _response(ranked)
 
 
 def _decode_avoid_path(encoded: str | None) -> list[Point] | None:
@@ -89,11 +89,18 @@ def _decode_avoid_path(encoded: str | None) -> list[Point] | None:
     return path if len(path) >= 2 else None
 
 
-def _to_out(ranked: RankedRoute) -> RouteOut:
+def _response(ranked: Sequence[RankedRoute]) -> RouteSearchResponse:
+    # 목록은 사용자 선호 순위(rank) 순서, 식별 글자는 FE 처럼 소요 시간 순서 (A 가 가장 빠름)
+    by_time = sorted(ranked, key=lambda r: (r.route.duration_s, r.route.distance_m))
+    labels = {r.route.route_id: _label(i) for i, r in enumerate(by_time, start=1)}
+    return RouteSearchResponse(routes=[_to_out(r, labels[r.route.route_id]) for r in ranked], excluded=[])
+
+
+def _to_out(ranked: RankedRoute, label: str) -> RouteOut:
     route = ranked.route
     return RouteOut(
         route_id=route.route_id,
-        label=_label(ranked.rank),
+        label=label,
         rank=ranked.rank,
         via=_via(route.steps),
         difficulty_score=route.difficulty_score,
@@ -113,9 +120,9 @@ def _to_out(ranked: RankedRoute) -> RouteOut:
     )
 
 
-def _label(rank: int) -> str:
+def _label(order: int) -> str:
     letters = string.ascii_uppercase
-    return letters[rank - 1] if rank <= len(letters) else str(rank)
+    return letters[order - 1] if order <= len(letters) else str(order)
 
 
 def _via(steps: Sequence[Step]) -> str:
