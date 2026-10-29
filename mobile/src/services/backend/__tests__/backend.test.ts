@@ -152,13 +152,19 @@ describe('BackendPlaceSearchProvider', () => {
 
   it('서버에 장소 검색 키가 없으면 샘플 지점 안에서만 찾는다 (없는 장소를 만들지 않는다)', async () => {
     const provider = new BackendPlaceSearchProvider('http://api.test', fakeFetch(503, { error: { code: 'PLACE_SEARCH_UNAVAILABLE', message: '' } }));
-    expect((await provider.search('회전교차로')).map((p) => p.id)).toEqual(['sample:roundabout']);
+    expect((await provider.search('역삼')).map((p) => p.id)).toEqual(['gangnam:yeoksam-station']);
     expect(await provider.search('광주역')).toEqual([]);
   });
 
-  it('데모 도시(0,0 부근)에서 저장된 장소는 경로를 찾을 수 없는 곳으로 거른다', () => {
+  it('도로망 범위 밖(데모 도시, 예전 광주 샘플 지점)에서 저장된 장소는 경로를 찾을 수 없는 곳으로 거른다', () => {
     const provider = new BackendPlaceSearchProvider('http://api.test');
     expect(provider.isServiceable({ ...SAMPLE_ORIGIN, location: { lat: 0.02, lng: 0.05 } })).toBe(false);
+    expect(provider.isServiceable({ ...SAMPLE_ORIGIN, location: { lat: 35.1768, lng: 126.9058 } })).toBe(false);
     expect(provider.isServiceable(SAMPLE_ORIGIN)).toBe(true);
+  });
+
+  it('시연용 지점은 모두 도로망 범위 안에 있다', () => {
+    const provider = new BackendPlaceSearchProvider('http://api.test');
+    for (const place of [SAMPLE_ORIGIN, ...SAMPLE_PLACES]) expect(provider.isServiceable(place)).toBe(true);
   });
 });

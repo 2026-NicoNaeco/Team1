@@ -4,6 +4,7 @@ import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import { toLocal, type LocalPoint } from '../domain/geo';
 import type { GeoPoint } from '../domain/types';
 import { colors, mapColors, radius, shadow, space } from '../design/tokens';
+import { ROAD_DATA_ATTRIBUTION } from '../services/backend/samplePlaces';
 import { Icon } from '../ui/Icon';
 import { Text } from '../ui/Text';
 import { centerCamera, fitCamera, project, type Camera, type Size } from './camera';
@@ -14,7 +15,7 @@ import { NO_INSETS, type MapAdapterProps } from './MapAdapter';
  * 실제 지도 SDK 를 붙이기 전, 백엔드 경로를 확인하기 위한 임시 지도.
  * 배경 지도 없이 경로선·출발/도착·차량·경로 칩만 그린다. 데모 지도(DemoMapView)는 가상 도시(위·경도 0,0) 범위로
  * 카메라가 묶여 있어 실제 좌표의 경로를 보여 줄 수 없기 때문이다. 끌기·확대는 지원하지 않는다.
- * 실제 지도가 아니라는 표시("실제 지도 연결 전")를 항상 보여 준다.
+ * 실제 지도가 아니라는 표시("실제 지도 연결 전")와 도로 자료 출처(OSM)를 항상 보여 준다.
  */
 
 const LIMITS = { min: 0.002, max: 0.6 };
@@ -156,7 +157,7 @@ export function RoutePreviewMap({ routes, markers, camera, insets = NO_INSETS, o
 
       <View style={[styles.attribution, { bottom: insets.bottom + space.sm }]}>
         <Text variant="micro" color={colors.textTertiary}>
-          실제 지도 연결 전 · 경로 모양만 보여요
+          실제 지도 연결 전 · {ROAD_DATA_ATTRIBUTION}
         </Text>
       </View>
     </View>
