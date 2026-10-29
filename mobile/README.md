@@ -196,7 +196,7 @@ mobile/
 | `LANE_COUNT`, `ROAD_TYPE` | 백엔드도 점수에 쓰지 않는 참고 정보입니다. 도로 유형 선호는 `road_preference` 로 반영합니다. |
 | 정보 없음 | 도로망 자료에 속성이 없는 구간은 `unknown`/`partial` 로 옵니다. 개발용 샘플 도로망은 `LANE_CHANGE` 를 일부러 비워 둡니다. |
 | 통행료 | 자료가 없어 항상 `{ availability: 'unknown' }` 입니다. |
-| 좌표 | 백엔드 샘플 도로망은 광주 일대입니다. 데모 지도의 가상 도시(위·경도 0,0 부근)를 보내면 `OUT_OF_SERVICE_AREA` 가 납니다. |
+| 좌표 | 백엔드 도로망은 `.env.example` 기본값이면 강남역·역삼역 일대 실제 도로(OpenStreetMap, 약 2.4km × 2km), `GRAPH_PATH` 를 비우면 광주 일대 가상 격자입니다. 범위는 `GET /v1/service-area` 로 받습니다. 데모 지도의 가상 도시(위·경도 0,0 부근)를 보내면 `OUT_OF_SERVICE_AREA` 가 납니다. OSM 자료를 쓰는 화면에는 "© OpenStreetMap contributors" 표시가 필요합니다. |
 
 ---
 

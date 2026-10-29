@@ -6,6 +6,7 @@ import pytest
 from app.domain.factors import FactorCode
 from app.domain.models import Point, Profile
 from app.services.cache import MemoryCache
+from app.services.hotspots import BBox, PostgisHotspotRepository
 from app.services.places import (
     KakaoPlaceSearch,
     Place,
@@ -112,3 +113,22 @@ def test_kakao_provider_without_key_is_unavailable():
 )
 def test_kakao_category(group_code, category_name, expected):
     assert kakao_category(group_code, category_name) is expected
+
+
+class FakePool:
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def fetch(self, *args):
+        return self.rows
+
+
+def test_postgis_hotspots_skip_rows_with_retired_codes():
+    """요소 코드가 바뀌기 전에 적재한 행이 있어도 나머지 지점은 보여야 한다."""
+    rows = [
+        {"id": "1", "code": "PROTECTED_ZONE", "lat": 35.15, "lng": 126.85, "note": "보호구역"},
+        {"id": "2", "code": "LANE_CHANGE_TRAFFIC", "lat": 35.16, "lng": 126.86, "note": None},
+    ]
+    repo = PostgisHotspotRepository(FakePool(rows))
+    records = asyncio.run(repo.find_in_bbox(BBox(126.8, 35.1, 126.9, 35.2), None, 10))
+    assert [r.code for r in records] == [FactorCode.PROTECTED_ZONE]

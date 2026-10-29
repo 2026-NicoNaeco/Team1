@@ -33,6 +33,7 @@ pytest
 | POST | `/v1/routes/reroute` | 경로 이탈 시 재탐색 (`current`, `heading_deg`, `previous_polyline`) |
 | POST | `/v1/profile/analyze` | 운전 기록 요약 → 가중치 갱신 (저장 없음) |
 | GET | `/v1/hotspots?bbox=minLng,minLat,maxLng,maxLat&codes=` | 화면 영역 내 어려운 지점 |
+| GET | `/v1/service-area` | 경로를 찾을 수 있는 지역 (`bbox`, 도로 위 `center`, `max_snap_distance_m`) |
 
 필드 이름은 snake_case 이고 의미·값은 FE(`mobile/src/domain/types.ts`)와 같다. FE 는 이름만 camelCase 로 바꾸면 된다.
 
@@ -86,8 +87,22 @@ pytest
   - `unknown`: 정보가 없다. `value` 가 없다. **0 이나 "안전함" 으로 표시하면 안 된다.**
   - 도로망 자료에 키가 없는 구간은 "정보 없음" 이다 (`app/routing/graph.py` 상단 형식 참고).
   - 방향 전환·유턴은 도로 형상으로 계산하므로 항상 `known` 이다.
-- `label` 은 rank 순서의 A, B, C … 다.
+- 후보는 FE 데모처럼 **사용자 선호 → 가장 빠른 길 → 고속도로 위주** 관점으로 찾고, 짧은 쪽 길이의 80% 이상을
+  함께 지나는 경로는 하나로 본다. 단 **가장 빠른 길은 겹쳐도 빼지 않는다**(완전히 같은 경로일 때만 뺀다).
+  그래서 `max_routes` 가 2 이상이면 후보 중 `extra_duration_s` 가 0 인 경로가 항상 있다.
+  재탐색에서는 가장 빠른 후보도 이탈 경로 회피를 적용해 찾으므로 0 보다 클 수 있다.
+  `max_routes=1` 이면 사용자 선호 경로 하나다.
+- 목록은 `rank`(사용자 선호 기준 비용) 순서다. `label` 은 FE 처럼 **소요 시간 순서**라 A 가 가장 빠르다.
 - `via` 는 가장 길게 지나는 도로 이름 두 개(지나는 순서)다. 이름 있는 도로가 없으면 "이름 없는 도로".
+- `duration_s` 는 **평소 한산할 때 기준**의 추정이다. 실시간 교통은 반영하지 않는다.
+  - 주행: 제한속도(`speed_kph`)의 80% 로 달린다고 본다 (가감속 반영, OSRM 자동차 프로필과 같은 비율).
+  - 신호: 확인된 신호등 1개당 평균 대기 20초. 신호 자료가 없는 구간은 대기 시간이 빠지므로 실제보다 짧을 수 있다.
+  - 회전: 우회전 5초, 좌회전 10초, 유턴 20초. 탐색 비용·경로 합계·안내 단계가 같은 값을 쓴다
+    (`app/routing/cost.py` 의 `turn_delay_s`, `app/routing/graph.py` 의 `RUNNING_SPEED_RATIO`·`SIGNAL_DELAY_S`).
+- 출발지·도착지는 **가장 가까운 도로 위 지점**에 붙는다. 교차로에서 5m 안이면 교차로에 붙는다.
+  `polyline` 의 첫 점·마지막 점이 그 도로 위 지점이다. 도로 위에서 두 지점이 10m 안이면 `SAME_LOCATION`,
+  도로까지 `max_snap_distance_m`(기본 1km)보다 멀면 `OUT_OF_SERVICE_AREA` 다. 양방향 도로 위에서 출발하면
+  어느 방향으로든 출발할 수 있다고 보고, 재탐색에 `heading_deg` 를 주면 반대 방향 출발은 유턴으로 계산한다.
 - `toll` 은 통행료 자료가 아직 없어서 항상 `{"availability": "unknown"}` 이다.
 - `excluded` 는 통행 제한 판정을 아직 하지 않아서 항상 빈 배열이다.
 
@@ -99,9 +114,9 @@ pytest
 | 필드 | 설명 |
 |---|---|
 | `maneuver` | `DEPART` / `STRAIGHT` / `LEFT` / `RIGHT` / `SHARP_LEFT` / `SHARP_RIGHT` / `U_TURN` / `ROUNDABOUT` / `MERGE` / `DIVERGE` / `ARRIVE` |
-| `instruction` | 화면에 그대로 보여 주는 문구. 예: `우회전 · 상무대로`, `합류 · 샘플대로`, `목적지 도착` |
+| `instruction` | 화면에 그대로 보여 주는 문구. 예: `우회전 · 상무대로`, `합류 · 샘플대로`, `목적지 도착`. 이름 없는 도로로 들어가면 `좌회전 · 테헤란로 방면`(다음 도로명) 또는 `좌회전 · 이면도로`(도로 종류: 이면도로·연결로·진출입로·고속도로) |
 | `lat`, `lng` | 이 동작을 하는 지점 |
-| `road_name` | 진입하는 도로명. 이름 없는 이면도로는 `null` |
+| `road_name` | 진입하는 도로명. 이름 없는 도로는 `null` |
 | `road_class` | `HIGHWAY` / `RAMP` / `ARTERIAL` / `COLLECTOR` / `LOCAL` |
 | `offset_m` | 경로 시작점부터 이 지점까지의 거리 |
 | `distance_m`, `duration_s` | 다음 동작까지의 거리·시간. `ARRIVE` 는 0 |
@@ -109,7 +124,8 @@ pytest
 | `factors` | 이 단계에서 마주치는 점수 요소 `{코드: 값}`. 횟수 요소는 횟수, km 요소는 km. 0 인 요소는 생략. 단계를 시작하는 회전도 포함 |
 | `unknown_factors` | 이 단계 구간에 자료가 전혀 없는 점수 요소 |
 
-`distance_m` 의 합은 경로의 `distance_m` 과 같다. 회전 임계값(30°/100°/165°)은 난이도 계산과 공유한다.
+`distance_m`·`duration_s` 의 합은 경로의 `distance_m`·`duration_s` 와 같다. 회전 임계값(30°/100°/165°)은 난이도 계산과 공유한다.
+이름 없는 짧은 구간으로 이어지는 직진은 따로 단계를 만들지 않고 앞 단계에 합친다.
 `MERGE`·`DIVERGE` 는 도로 등급이 고속도로로 바뀌거나(진입) 고속도로에서 다른 등급으로 바뀔 때(진출) 나온다.
 `reroute` 에 `heading_deg` 를 주면 첫 단계가 `DEPART` 대신 실제 회전 안내(예: `U_TURN`)로 나온다.
 
@@ -148,12 +164,15 @@ app/
     cost.py         비용 모델 (주행 시간 + 난이도 점수 × 15초), 구간 전환 요소 판정
     measure.py      엣지 경로 → 요소별 측정값 (known / partial / unknown)
     steps.py        엣지 경로 → 턴바이턴 안내 단계 (직진 구간 병합)
-    graph.py        도로망 그래프 + JSON 로더 (형식은 파일 상단 주석)
+    graph.py        도로망 그래프 + JSON 로더 (형식은 파일 상단 주석, 회전 금지 포함)
+    osm.py          OSM XML → 그래프 JSON 변환기
+    snap.py         좌표 → 도로 위 지점, 출발·도착 조각 구간
                     좌표 → 최근접 노드는 격자 공간 인덱스 (노드 20만에서 선형 스캔 대비 수천 배)
     sample_graph.py 개발용 샘플 도로망 (광주 일대 격자)
   services/   경로 조합, 장소 검색·캐시, 핫스팟 저장소, 프로필 분석
   api/        FastAPI 라우터·스키마·에러 처리
 db/init.sql   PostGIS hotspots 테이블
+data/gangnam.json  강남역·역삼역 일대 실제 도로망 (OSM 변환 결과)
 ```
 
 ## 알고리즘 구현체 교체
@@ -172,3 +191,46 @@ db/init.sql   PostGIS hotspots 테이블
 `Route.measurements` 도 비워 둘 수 있다. 그러면 `factor_amounts` 를 출처 미상의 확인값(`known`)으로 내보내서
 "정보 없음" 을 구분하지 못하므로, 같은 엣지 경로로 `app.routing.measure.measure_route(...)` 를 쓰는 것이 좋다.
 요소 판정(회전·지역 진입·고속도로 진입/진출)은 `app.routing.cost.transition` 한 곳에 있다.
+
+### 서비스 지역
+
+`GET /v1/service-area` 는 도로망이 덮는 영역을 준다. FE 는 기본 출발지와 지도 첫 화면을 이 안에서 잡아야 한다.
+`center` 는 영역 중앙에서 가장 가까운 도로 위 지점이라 그대로 출발지로 쓸 수 있다.
+`GRAPH_PATH=data/gangnam.json`(`.env.example` 기본값)이면 강남역·역삼역 일대, 비우면 광주 상무지구 ~ 동구 일대의 가상 격자다.
+
+## 실제 도로망 (OpenStreetMap)
+
+`data/gangnam.json` 은 OSM 강남역·역삼역 일대(위도 37.490~37.508, 경도 127.018~127.045, 약 2.4km × 2km,
+노드 1,403개, 방향 구간 3,848개, 회전 금지 59개)를 `app/routing/osm.py` 로 바꾼 것이다.
+원본은 Overpass API 에서 도로·도로의 노드·회전 금지만 받았다 (2026-10-26 기준).
+
+```bash
+# 1) 원본 받기 (Overpass 는 User-Agent 가 없으면 406 을 준다)
+cat > gangnam.overpassql <<'EOF'
+[out:xml][timeout:120];
+way["highway"](37.490,127.018,37.508,127.045)->.roads;
+(.roads; node(w.roads); relation(bw.roads)["type"="restriction"];);
+out body;
+EOF
+curl -A "easy-route-api (Team1)" --data-urlencode "data@gangnam.overpassql" \
+  https://overpass-api.de/api/interpreter -o gangnam.osm
+
+# 2) 변환
+python -m app.routing.osm gangnam.osm data/gangnam.json --name "OpenStreetMap (강남역·역삼역 일대)"
+```
+
+- 차도만 남긴다(주차장 통로·진입로·보도 제외). 교차로마다 구간을 나누고, 경계에서 잘려 빠져나올 수 없는
+  구간은 버린다(가장 큰 강연결 부분만 남김).
+- 속도는 `maxspeed` 가 있으면 그 값, 없으면 등급 기본값(간선 50, 이면도로 30 km/h)이다.
+- **OSM 에 태그가 없는 것은 "정보 없음" 이다.**
+  - 신호등: OSM 에 빠진 곳이 많아 신호가 확인된 구간만 셈한다. 그래서 대부분 `partial` 이다.
+  - 좁은 도로: FE 정의(마주 오는 차와 지나가기 빠듯한 길)대로 그래프의 `narrow` 로 직접 판정한다.
+    폭 태그, 골목(`service=alley`), 양방향 1차로, 간선·보조간선 등급으로 판정하고 나머지 이면도로는 정보 없음.
+  - 보호구역·사고다발·교통량·비보호 좌회전·차로 변경·급커브는 OSM 에 없어 항상 `unknown` 이다.
+    공공데이터로 따로 붙여야 한다.
+- OSM 의 회전 금지(좌회전·유턴 금지 등, 경유지가 노드인 것)는 그래프의 `turn_restrictions` 로 옮기고
+  탐색이 그 회전을 하지 않는다. 도로 중간에서 출발·도착해도 원래 구간 기준으로 지킨다.
+  경유지가 도로인 규칙과 범위 밖 도로를 가리키는 규칙은 아직 옮기지 않는다.
+- **유턴 허용 지점 정보는 OSM 에 없다.** 금지 규칙이 없는 곳의 유턴은 가능하다고 보고(점수·시간으로만 억제),
+  양방향 도로에서는 아무 교차로에서나 되돌아갈 수 있다. 실제로 유턴이 허용된 곳인지는 보장하지 않는다.
+- 출처 표시: OSM 자료는 ODbL 이라 지도·경로를 보여 주는 화면에 "© OpenStreetMap contributors" 를 표시해야 한다.

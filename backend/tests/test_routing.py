@@ -1,13 +1,23 @@
 import math
 import random
+import time
 
 import pytest
 
 from app.domain.factors import FactorCode, MeasureUnit
-from app.domain.models import Availability, DataSourceKind, Maneuver, Measurement, Point, Profile, RoadClass
+from app.domain.models import (
+    Availability,
+    DataSourceKind,
+    Maneuver,
+    Measurement,
+    Point,
+    Profile,
+    RoadClass,
+    RoadPreference,
+)
 from app.routing import polyline
 from app.routing.cost import classify_turn
-from app.routing.dijkstra import DijkstraRouteFinder
+from app.routing.dijkstra import DUPLICATE_SIMILARITY, DijkstraRouteFinder, path_similarity
 from app.routing.errors import OutOfServiceArea, SameLocation
 from app.routing.geo import haversine_m, signed_turn_deg
 from app.routing.graph import Node, RoadGraph, _NodeGrid
@@ -158,6 +168,56 @@ def test_steps_merge_straight_run_on_same_road():
     assert route.steps[0].distance_m == pytest.approx(route.distance_m)
 
 
+def _unnamed_graph() -> RoadGraph:
+    """큰길(동쪽) → 이름 없는 짧은 직진 구간 → B 에서 이름 없는 길로 좌회전(북쪽) → C 에서 목적로로 우회전(동쪽).
+
+            C ---- 목적로 ---- D
+            |
+       (이름 없음, 북쪽)
+            |
+    A --큰길-- X --(이름 없음)-- B
+    """
+    return RoadGraph.from_dict({
+        "nodes": [
+            {"id": "A", "lat": 35.0, "lng": 127.000},
+            {"id": "X", "lat": 35.0, "lng": 127.002},
+            {"id": "B", "lat": 35.0, "lng": 127.0025},
+            {"id": "C", "lat": 35.002, "lng": 127.0025},
+            {"id": "D", "lat": 35.002, "lng": 127.0045},
+        ],
+        "edges": [
+            {"id": "AX", "from": "A", "to": "X", "name": "큰길", "oneway": True},
+            {"id": "XB", "from": "X", "to": "B", "oneway": True},
+            {"id": "BC", "from": "B", "to": "C", "road_class": "LOCAL", "oneway": True},
+            {"id": "CD", "from": "C", "to": "D", "name": "목적로", "oneway": True},
+        ],
+    })
+
+
+def test_straight_onto_unnamed_segment_merges_into_previous_step():
+    graph = _unnamed_graph()
+    [route] = DijkstraRouteFinder(graph).find_route(Point(35.0, 127.0), Point(35.0, 127.0025), Profile())
+    assert [s.instruction for s in route.steps] == ["출발 · 큰길", "목적지 도착"]
+
+
+def test_turn_onto_unnamed_road_names_the_road_ahead():
+    graph = _unnamed_graph()
+    [route] = DijkstraRouteFinder(graph).find_route(Point(35.0, 127.0), Point(35.002, 127.0045), Profile())
+    assert [s.instruction for s in route.steps] == [
+        "출발 · 큰길",
+        "좌회전 · 목적로 방면",
+        "우회전 · 목적로",
+        "목적지 도착",
+    ]
+    assert route.steps[1].road_name is None  # API 계약: 이름 없는 도로는 null
+
+
+def test_turn_onto_unnamed_road_without_named_road_ahead_uses_road_type():
+    graph = _unnamed_graph()
+    [route] = DijkstraRouteFinder(graph).find_route(Point(35.0, 127.0), Point(35.002, 127.0025), Profile())
+    assert [s.instruction for s in route.steps] == ["출발 · 큰길", "좌회전 · 이면도로", "목적지 도착"]
+
+
 def test_avoid_path_pushes_route_to_other_branch(square_graph: RoadGraph):
     finder = DijkstraRouteFinder(square_graph)
     [first] = finder.find_route(A, D, Profile.fastest())
@@ -230,6 +290,41 @@ def test_node_grid_matches_brute_force():
         found = grid.nearest(query)
         assert found is not None
         assert math.isclose(found[1], _brute_force_nearest_m(nodes, query), rel_tol=1e-9, abs_tol=1e-6)
+
+
+def test_node_grid_max_distance_matches_brute_force():
+    """거리 상한을 주면 그 안의 최근접 노드는 그대로, 밖이면 None."""
+    rng = random.Random(11)
+    nodes = [
+        Node(f"n{i}", Point(35.0 + rng.uniform(0, 0.1), 126.8 + rng.uniform(0, 0.1)))
+        for i in range(300)
+    ]
+    grid = _NodeGrid(nodes)
+    max_m = 1_000.0
+
+    queries = [
+        *(Point(35.0 + rng.uniform(-0.03, 0.13), 126.8 + rng.uniform(-0.03, 0.13)) for _ in range(300)),
+        Point(0.01, 0.01),
+        Point(89.9, 0.0),
+    ]
+    for query in queries:
+        expected = _brute_force_nearest_m(nodes, query)
+        found = grid.nearest(query, max_distance_m=max_m)
+        if expected <= max_m:
+            assert found is not None
+            assert math.isclose(found[1], expected, rel_tol=1e-9, abs_tol=1e-6)
+        else:
+            assert found is None
+
+
+def test_far_coordinate_is_rejected_quickly():
+    """도로망에서 아주 먼 좌표도 바로 OUT_OF_SERVICE_AREA 다 (예전에는 40초 넘게 멈췄다)."""
+    finder = DijkstraRouteFinder(build_sample_graph())
+    started = time.perf_counter()
+    for far in (Point(0.01, 0.01), Point(89.9, 0.0), Point(-45.0, -170.0)):
+        with pytest.raises(OutOfServiceArea):
+            finder.find_route(far, Point(35.1595, 126.8526), Profile())
+    assert time.perf_counter() - started < 1.0
 
 
 def test_node_grid_handles_degenerate_graphs():
@@ -378,10 +473,37 @@ def test_highway_entry_and_exit_are_merge_diverge_not_turns():
     assert route.measurements[FactorCode.MERGE_DIVERGE].availability is Availability.PARTIAL
 
 
+def test_duration_includes_running_speed_signals_and_turns(square_graph: RoadGraph):
+    """A→B→D: 400m 두 구간을 30km/h × 0.8 로 달리고(60초씩), B 에서 우회전(5초)."""
+    [route] = DijkstraRouteFinder(square_graph).find_route(A, D, Profile.fastest())
+    assert _via_b(route)
+    assert route.duration_s == pytest.approx(60 + 5 + 60)
+    # 안내 단계 시간의 합은 경로 시간과 같다
+    assert sum(s.duration_s for s in route.steps) == pytest.approx(route.duration_s)
+
+
+def test_signal_wait_is_part_of_travel_time():
+    graph = RoadGraph.from_dict({
+        "nodes": [{"id": "A", "lat": 35.0, "lng": 127.0}, {"id": "B", "lat": 35.0036, "lng": 127.0}],
+        "edges": [{"id": "AB", "from": "A", "to": "B", "length_m": 400, "speed_kph": 30, "traffic_lights": 2}],
+    })
+    assert graph.edges["AB"].travel_time_s == pytest.approx(60 + 2 * 20)
+
+
+def test_left_turn_takes_longer_than_right_turn():
+    from app.routing.cost import LEFT_TURN_DELAY_S, RIGHT_TURN_DELAY_S, Transition
+
+    assert Transition({FactorCode.TURN_COUNT: 1}, left_turn=True).delay_s == LEFT_TURN_DELAY_S
+    assert Transition({FactorCode.TURN_COUNT: 1}).delay_s == RIGHT_TURN_DELAY_S
+    assert LEFT_TURN_DELAY_S > RIGHT_TURN_DELAY_S
+    assert Transition({}).delay_s == 0
+
+
 def test_steps_carry_offsets_and_turn_factors(square_graph: RoadGraph):
     [route] = DijkstraRouteFinder(square_graph).find_route(A, D, Profile.fastest())
     assert [s.offset_m for s in route.steps] == [0, 400, 800]
-    assert [s.instruction for s in route.steps] == ["출발", "우회전", "목적지 도착"]
+    # 도로명이 없는 그래프라 도로 종류로 안내한다
+    assert [s.instruction for s in route.steps] == ["출발 · 이면도로", "우회전 · 이면도로", "목적지 도착"]
     # 우회전 단계의 요소에는 그 회전 자체가 들어간다
     assert route.steps[1].factor_amounts[FactorCode.TURN_COUNT] == 1
     # 자료가 없는 구간의 점수 요소는 unknown_factors 로 알린다
@@ -397,3 +519,75 @@ def test_sample_graph_reports_demo_source():
     # 샘플 도로망은 필수 차로 변경 자료를 일부러 비워 둔다
     assert lane_change.availability is Availability.UNKNOWN
     assert route.measurements[FactorCode.TRAFFIC_LIGHT].availability is Availability.KNOWN
+
+
+# ---------- 후보 구성 (FE 데모 경로 제공자와 같은 방식) ----------
+
+SAMPLE_ORIGIN = Point(35.1595, 126.8526)
+SAMPLE_DESTINATION = Point(35.1768, 126.9058)
+
+
+def test_candidates_include_fastest_route_even_for_cautious_profile():
+    """FE 는 가장 빠른 후보를 기준으로 추가 시간을 보여 주므로 후보에 꼭 있어야 한다."""
+    finder = DijkstraRouteFinder(build_sample_graph())
+    cautious = Profile(
+        road_preference=RoadPreference.LOCAL,
+        hard_factors=frozenset({FactorCode.MERGE_DIVERGE, FactorCode.TURN_COUNT, FactorCode.TRAFFIC_VOLUME}),
+    )
+    [fastest] = finder.find_route(SAMPLE_ORIGIN, SAMPLE_DESTINATION, Profile.fastest())
+    routes = finder.find_route(SAMPLE_ORIGIN, SAMPLE_DESTINATION, cautious, max_routes=3)
+    assert fastest.route_id in {r.route_id for r in routes}
+    # 순위는 사용자 선호 기준이라 가장 빠른 길이 1순위는 아니다
+    assert routes[0].route_id != fastest.route_id
+    assert [r.cost for r in routes] == sorted(r.cost for r in routes)
+
+
+def test_fastest_route_is_kept_even_when_it_overlaps_profile_route():
+    """선호 경로와 80% 넘게 겹쳐도 가장 빠른 길은 빠지면 안 된다.
+
+    빠지면 선호 경로가 '가장 빠름' 자리를 대신해 FE 의 허용 추가 시간 기준이 틀어진다.
+    """
+    finder = DijkstraRouteFinder(build_sample_graph())
+    origin, destination = Point(35.177906, 126.849646), Point(35.157653, 126.875709)
+    profile = Profile(weights={FactorCode.TURN_COUNT: 5.0})
+    [fastest] = finder.find_route(origin, destination, Profile.fastest())
+    routes = finder.find_route(origin, destination, profile, max_routes=3)
+    assert fastest.route_id in {r.route_id for r in routes}
+    assert min(r.duration_s for r in routes) == pytest.approx(fastest.duration_s)
+
+
+def test_single_route_is_the_profile_route():
+    """max_routes=1 (재탐색 기본값)이면 사용자 선호 경로만 준다."""
+    finder = DijkstraRouteFinder(build_sample_graph())
+    cautious = Profile(road_preference=RoadPreference.LOCAL, hard_factors=frozenset({FactorCode.MERGE_DIVERGE}))
+    [best] = finder.find_route(SAMPLE_ORIGIN, SAMPLE_DESTINATION, cautious, max_routes=1)
+    first = finder.find_route(SAMPLE_ORIGIN, SAMPLE_DESTINATION, cautious, max_routes=3)[0]
+    assert best.route_id == first.route_id
+
+
+def test_candidates_do_not_mostly_overlap():
+    """가장 빠른 길은 겹쳐도 넣으므로(위 테스트) 나머지 후보끼리만 본다."""
+    finder = DijkstraRouteFinder(build_sample_graph())
+    [fastest] = finder.find_route(SAMPLE_ORIGIN, SAMPLE_DESTINATION, Profile.fastest())
+    routes = [
+        r
+        for r in finder.find_route(SAMPLE_ORIGIN, SAMPLE_DESTINATION, Profile(), max_routes=3)
+        if r.route_id != fastest.route_id
+    ]
+    graph = finder.graph
+
+    def edges(route):
+        # 경로 좌표로 엣지를 되찾는다 (finder 의 회피 매칭과 같은 방식)
+        return [graph.edges[e] for e in finder._edges_on(route.path) if not e.endswith("_r")]
+
+    for i, a in enumerate(routes):
+        for b in routes[i + 1:]:
+            assert path_similarity(edges(a), edges(b)) < DUPLICATE_SIMILARITY
+
+
+def test_path_similarity():
+    graph = _line_graph({}, {}, {})
+    e0, e1, e2 = (graph.edges[f"E{i}"] for i in range(3))
+    assert path_similarity([e0, e1, e2], [e0, e1, e2]) == pytest.approx(1.0)
+    assert path_similarity([e0, e1, e2], [e0]) == pytest.approx(1.0)  # 짧은 쪽 기준
+    assert path_similarity([e0], [e2]) == 0

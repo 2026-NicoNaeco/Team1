@@ -36,7 +36,7 @@ Layers: `api/` (FastAPI routers and pydantic schemas) → `services/` → `routi
 **Composition root.** `app/main.py::build_container` builds a `Container` (`app/api/deps.py`) and stores it on `app.state.container`. Routers fetch services through the `get_*` dependencies in `deps.py`. If a container is already set on `app.state`, the lifespan uses it and won't close it. Tests replace pieces directly, e.g. `client.app.state.container.route_service = RouteService(...)`.
 
 **Every external dependency is optional, with a fallback.** Settings come from env / `.env` (`app/config.py`).
-- `GRAPH_PATH` unset → `routing/sample_graph.py`, a synthetic grid around Gwangju. The JSON graph format is documented at the top of `routing/graph.py`.
+- `GRAPH_PATH` unset → `routing/sample_graph.py`, a synthetic grid around Gwangju. The JSON graph format (including `narrow` and `turn_restrictions`) is documented at the top of `routing/graph.py`. `.env.example` points it at `data/gangnam.json`, a real OSM road network (강남역·역삼역 일대, downloaded from Overpass; the query is in `backend/README.md`) built with `python -m app.routing.osm`. In OSM-derived data a missing tag means "no data", so the converter writes keys only when the tag exists.
 - `REDIS_URL` unset → `MemoryCache`. Redis errors are logged and skipped, never raised.
 - `DATABASE_URL` unset → `GraphHotspotRepository`, which derives hotspots from graph edges instead of the PostGIS table in `db/init.sql`.
 - `KAKAO_REST_API_KEY` unset → place search returns 503 `PLACE_SEARCH_UNAVAILABLE`.
@@ -49,6 +49,7 @@ The tests use the `settings` fixture in `tests/conftest.py`, which disables all 
 - `Route.steps` may be empty. Use `routing.steps.build_steps(path, start_heading_deg)` to generate turn-by-turn steps.
 - `Route.measurements` may be empty, but then every factor is reported as `known`, so "no data" is lost. Use `routing.measure.measure_route(...)` on the same edge path.
 - Raise `OutOfServiceArea` / `SameLocation` / `NoRouteFound` (`routing/errors.py`). `api/errors.py` maps them to HTTP codes.
+- Coordinates snap to the nearest point **on a road** (`routing/snap.py`), not the nearest node; within 5 m of a junction they snap to the junction. Mid-edge snaps become piece edges with ids `"<edge id>@..."`. Anything keyed by edge id (turn restrictions, avoid penalties) must go through `base_edge_id()`.
 
 **Factors match the front end.** The 15 codes in `domain/factors.py` have the same names, units and meanings as `mobile/src/domain/factors.ts`; change both together. Each factor has a kind:
 - `EDGE`: a road-segment property summed per edge, as a count or as km (`NARROW_ROAD`, `UNPAVED_ROAD`, `TRAFFIC_VOLUME`, `ROAD_TYPE` are km).
@@ -58,7 +59,7 @@ The tests use the `settings` fixture in `tests/conftest.py`, which disables all 
 
 `SHARP_TURN` is a road-curve section (edge attribute `sharp_curves`), not a ≥100° turn. Entering or leaving a `HIGHWAY` edge is `MERGE_DIVERGE` (step maneuver `MERGE`/`DIVERGE`) and is not a `TURN_COUNT`.
 
-**Cost model** (`routing/cost.py`): cost = travel time × road-preference factor + difficulty points × `POINT_SECONDS` (15 s). Points = Σ amount × `FactorMeta.base_penalty` × `Profile.weight(code)`, where amount is a count or km. `cost.transition(prev, nxt)` is the single place that decides transition factors (zone entry, turns, unprotected left, merge/diverge). Search cost, route totals, steps and measurements all call it, so they cannot disagree. The turn-angle thresholds (30°/100°/165°) are shared between cost and step generation. A reversal onto the same edge always counts as a U-turn. Moving within a roundabout is not counted as a turn.
+**Cost model** (`routing/cost.py`): cost = travel time × road-preference factor + turn time + difficulty points × `POINT_SECONDS` (15 s). Travel time is 80% of the speed limit plus 20 s per known traffic light (`graph.py`); turn time (right 5 s, left 10 s, U-turn 20 s) comes from `turn_delay_s`, and route and step durations include it. Points = Σ amount × `FactorMeta.base_penalty` × `Profile.weight(code)`, where amount is a count or km. `cost.transition(prev, nxt)` is the single place that decides transition factors (zone entry, turns, unprotected left, merge/diverge). Search cost, route totals, steps and measurements all call it, so they cannot disagree. The turn-angle thresholds (30°/100°/165°) are shared between cost and step generation. A reversal onto the same edge always counts as a U-turn. Moving within a roundabout is not counted as a turn.
 
 **Measurements** (`routing/measure.py`): every route factor is reported as `known` / `partial` / `unknown`, with `coverage`, the graph's `source` and `verification`. Edge data is "known" only if its JSON key is present (`graph._KNOWN_KEYS`), so **a missing key means no data, not 0**. Turn counts are always known. `UNPROTECTED_LEFT` coverage is the share of left turns whose approach edge has `unprotected_left`.
 

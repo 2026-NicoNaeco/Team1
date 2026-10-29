@@ -55,6 +55,7 @@ async def build_container(settings: Settings) -> Container:
         hotspot_repository=hotspots,
         cache=cache,
         http_client=http_client,
+        service_area=graph.service_area(),
     )
 
 
