@@ -66,7 +66,7 @@ def test_place_search_is_cached():
 def test_kakao_provider_parses_response():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "KakaoAK test-key"
-        assert request.url.params["sort"] == "distance"
+        assert request.url.params["sort"] == "accuracy"
         return httpx.Response(200, json={"documents": [{
             "id": "123", "place_name": "광주광역시청", "address_name": "광주 서구 치평동 1200",
             "road_address_name": "광주 서구 내방로 111", "category_name": "공공기관",

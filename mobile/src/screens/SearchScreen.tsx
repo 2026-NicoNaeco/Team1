@@ -88,10 +88,15 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
   }, [query, attempt]);
 
   const blockedId = mode === 'destination' ? origin.id : destination?.id;
+  // 검색 결과에는 도로망 범위 밖 장소도 섞여 온다. 고르면 경로를 못 찾으므로 미리 알리고 막는다
+  const outsideArea = useCallback((place: Place) => {
+    const places = getServices().places;
+    return places.isServiceable ? !places.isServiceable(place) : false;
+  }, []);
 
   const choose = useCallback(
     (place: Place) => {
-      if (place.id === blockedId) return;
+      if (place.id === blockedId || outsideArea(place)) return;
       if (mode === 'destination') {
         setDestination(place);
         navigation.navigate('RouteCompare');
@@ -100,7 +105,7 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
         navigation.goBack();
       }
     },
-    [blockedId, mode, navigation, setDestination, setOrigin],
+    [blockedId, mode, navigation, outsideArea, setDestination, setOrigin],
   );
 
   const suggestions = useMemo(() => {
@@ -111,6 +116,7 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
 
   const renderRow = (place: Place) => {
     const blocked = place.id === blockedId;
+    const outside = !blocked && outsideArea(place);
     const distance = formatDistance(haversineM(origin.location, place.location));
     return (
       <PlaceRow
@@ -123,9 +129,11 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
             ? mode === 'destination'
               ? '출발지와 같은 장소예요'
               : '도착지와 같은 장소예요'
-            : `${CATEGORY_LABEL[place.category]} · 출발지에서 ${distance}`
+            : outside
+              ? `경로 안내 지역 밖이에요 · 출발지에서 ${distance}`
+              : `${CATEGORY_LABEL[place.category]} · 출발지에서 ${distance}`
         }
-        disabled={blocked}
+        disabled={blocked || outside}
         accessibilityHint={mode === 'destination' ? '누르면 이 장소로 가는 경로를 비교해요' : '누르면 출발지로 정해요'}
         onPress={() => choose(place)}
       />
