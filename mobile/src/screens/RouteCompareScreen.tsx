@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, type ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { formatExtra, formatMinutes, placeLabel } from '../domain/format';
@@ -8,6 +8,7 @@ import { colors, layout, radius, shadow, space } from '../design/tokens';
 import { MapView, type CameraRequest, type MapMarker, type MapRoute } from '../map';
 import type { RootScreenProps } from '../navigation/types';
 import { useFontScale } from '../hooks/useFontScale';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTripStore } from '../state/tripStore';
 import { useUiStore } from '../state/uiStore';
 import { LetterBadge } from '../ui/Badges';
@@ -18,6 +19,7 @@ import { IconButton } from '../ui/IconButton';
 import { Icon } from '../ui/Icon';
 import { Notice, type NoticeTone } from '../ui/Notice';
 import { RouteCard } from '../ui/RouteCard';
+import { RouteSummaryList } from '../ui/RouteSummaryList';
 import { ActionBar } from '../ui/Screen';
 import { LoadingView, SkeletonBlock, StateView } from '../ui/StateViews';
 import { Text } from '../ui/Text';
@@ -27,6 +29,7 @@ const NOTICE_TONE: Record<RecommendationNotice['kind'], NoticeTone> = {
   excluded_restricted: 'info',
   single_candidate: 'info',
   missing_info: 'unknown',
+  fastest_not_included: 'info',
 };
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
@@ -64,6 +67,12 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
   const [overlayHeight, setOverlayHeight] = useState(0);
   const [titleRowHeight, setTitleRowHeight] = useState(48);
   const [sheetIndex, setSheetIndex] = useState(1);
+  const reducedMotion = useReducedMotion();
+  // 지도 칩이나 요약 줄로 경로를 고르면 그 경로의 카드로 스크롤한다. 카드 위치는 레이아웃에서 받아 둔다.
+  const scrollRef = useRef<ScrollView>(null);
+  const listY = useRef(0);
+  const cardListY = useRef(0);
+  const cardY = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!destination) {
@@ -146,6 +155,16 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
   const toggleLabel = sheetIndex === 0 ? '목록 보기' : sheetIndex === 1 ? '목록 크게 보기' : '지도 보기';
   const onToggle = () => setSheetIndex(sheetIndex === 0 ? 1 : sheetIndex === 1 ? 2 : 0);
 
+  const reveal = (id: string) => {
+    if (sheetIndex === 0) return; // 요약 단계에서는 시트의 요약 줄이 바뀌는 것으로 충분하다
+    const y = listY.current + cardListY.current + (cardY.current[id] ?? 0) - space.sm;
+    scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: !reducedMotion });
+  };
+  const chooseAndReveal = (id: string) => {
+    selectRoute(id);
+    reveal(id);
+  };
+
   const openDetail = () => {
     if (selected) navigation.navigate('RouteDetail', { routeId: selected.route.id });
   };
@@ -163,7 +182,7 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
           markers={markers}
           camera={camera}
           insets={{ top: overlayHeight + space.sm, bottom: visibleSheet + space.sm, left: 0, right: 0 }}
-          onRoutePress={selectRoute}
+          onRoutePress={chooseAndReveal}
           accessibilityLabel={
             ready
               ? `지도에 경로 ${candidates.length}개가 표시되어 있어요. 아래 목록에서 경로를 선택할 수 있어요.`
@@ -177,6 +196,7 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
           snapHeights={snapHeights}
           index={sheetIndex}
           onIndexChange={setSheetIndex}
+          scrollRef={scrollRef}
           header={
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleRow} onLayout={(e) => setTitleRowHeight(e.nativeEvent.layout.height)}>
@@ -198,7 +218,7 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
                       {selected.item.headline}
                     </Text>
                     <Text variant="caption" color={colors.textSecondary} numberOfLines={2}>
-                      {formatMinutes(selected.item.durationMinutes)} · {formatExtra(selected.item.extraMinutes)} · 예상 운전 부담 {burdenLabel(selected.item.burdenLevel)}
+                      {formatMinutes(selected.item.durationMinutes)} · {formatExtra(selected.item.extraMinutes)} · 예상 운전 부담 {burdenLabel(selected.item.burdenLevel, selected.item.burdenMayBeHigher)}
                     </Text>
                   </View>
                   <Icon name="chevron-up" size={20} color={colors.textTertiary} />
@@ -252,7 +272,24 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
             ) : null}
 
             {ready ? (
-              <View style={styles.cards} accessibilityRole="radiogroup">
+              <View style={styles.cards} onLayout={(e) => (listY.current = e.nativeEvent.layout.y)}>
+                {/* 카드 한 장이 화면 절반을 차지하므로, 세 경로의 시간·부담은 맨 위에서 한눈에 견주게 한다 */}
+                {items.length > 1 ? (
+                  <RouteSummaryList
+                    items={items.map(({ item, route }) => ({
+                      id: route.id,
+                      label: route.label,
+                      durationMinutes: item.durationMinutes,
+                      extraMinutes: item.extraMinutes,
+                      burdenLevel: item.burdenLevel,
+                      burdenMayBeHigher: item.burdenMayBeHigher,
+                      isRecommended: item.isRecommended,
+                      withinTimeLimit: item.withinTimeLimit,
+                    }))}
+                    selectedId={selectedRouteId}
+                    onPress={chooseAndReveal}
+                  />
+                ) : null}
                 {recommendation.notices
                   .filter((n) => n.kind === 'over_limit')
                   .map((notice) => (
@@ -264,18 +301,28 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
                       onAction={() => navigation.navigate('Preferences')}
                     />
                   ))}
-                {items.map(({ item, route }) => (
-                  <RouteCard
-                    key={route.id}
-                    testID={`card-${route.label}`}
-                    route={route}
-                    ranked={item}
-                    selected={route.id === selectedRouteId}
-                    onPress={() => selectRoute(route.id)}
-                  />
-                ))}
+                {/* 목록이 왜 이렇게 구성됐는지(제외된 경로, 후보 1개, 가장 빠른 길이 후보에 없음)는 카드보다 먼저 알린다 */}
                 {recommendation.notices
-                  .filter((n) => n.kind !== 'over_limit')
+                  .filter((n) => n.kind === 'excluded_restricted' || n.kind === 'single_candidate' || n.kind === 'fastest_not_included')
+                  .map((notice) => (
+                    <Notice key={notice.kind} tone={NOTICE_TONE[notice.kind]} text={notice.text} />
+                  ))}
+                <View accessibilityRole="radiogroup" style={styles.cardList} onLayout={(e) => (cardListY.current = e.nativeEvent.layout.y)}>
+                  {items.map(({ item, route }) => (
+                    <View key={route.id} onLayout={(e) => (cardY.current[route.id] = e.nativeEvent.layout.y)}>
+                      <RouteCard
+                        testID={`card-${route.label}`}
+                        route={route}
+                        ranked={item}
+                        selected={route.id === selectedRouteId}
+                        onPress={() => selectRoute(route.id)}
+                        onlyCandidate={items.length === 1}
+                      />
+                    </View>
+                  ))}
+                </View>
+                {recommendation.notices
+                  .filter((n) => n.kind === 'missing_info')
                   .map((notice) => (
                     <Notice key={notice.kind} tone={NOTICE_TONE[notice.kind]} text={notice.text} />
                   ))}
@@ -394,12 +441,14 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: layout.screenX, paddingTop: space.xs },
   loading: { gap: space.md },
   cards: { gap: space.md },
+  cardList: { gap: space.md },
   differs: { flexDirection: 'row', alignItems: 'center', gap: space.sm, justifyContent: 'space-between' },
   differsText: { flex: 1 },
   buttons: { flexDirection: 'row', gap: space.sm },
   // column-reverse 로 두면 마지막 버튼(안내 시작)이 위에 온다
   buttonsStacked: { flexDirection: 'column-reverse' },
   btnStacked: { alignSelf: 'stretch' },
-  btnDetail: { flex: 3 },
-  btnStart: { flex: 8 },
+  // "자세히"는 글자 폭만큼만 차지해 작은 화면에서도 한 줄로 두고, 남는 폭은 안내 시작 버튼이 쓴다
+  btnDetail: { flexShrink: 0 },
+  btnStart: { flex: 1 },
 });

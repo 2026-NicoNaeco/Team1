@@ -95,7 +95,10 @@ class KakaoPlaceSearch:
             raise PlaceSearchUnavailable("장소 검색 API 키가 설정되지 않았습니다.")
         params: dict[str, str | int] = {"query": query, "size": size}
         if near is not None:
-            params.update(x=near.lng, y=near.lat, sort="distance")
+            # 거리순(distance)이면 이름이 일부만 맞는 근처 장소가 먼저 와서 "역삼역"을 찾아도 역삼역이 안 나온다.
+            # 정확도순도 좌표를 반영해 근처를 먼저 주고 distance 도 채워 준다. 반경(radius)은 범위 밖 검색어에
+            # 엉뚱한 근처 장소(잠실역 → 선릉역)를 주므로 쓰지 않는다
+            params.update(x=near.lng, y=near.lat, sort="accuracy")
         try:
             resp = await self._client.get(
                 f"{self._base_url}/v2/local/search/keyword.json",
@@ -135,8 +138,8 @@ class PlaceSearchService:
         # 근처 검색은 약 100m 단위로 묶어 캐시 적중률을 높인다
         near_key = f"{near.lat:.3f},{near.lng:.3f}" if near else "-"
         digest = hashlib.sha1(f"{query}|{near_key}|{size}".encode()).hexdigest()
-        # Place 형식이 바뀌면 버전을 올려 예전 캐시를 읽지 않게 한다
-        key = f"places:v2:{digest}"
+        # Place 형식이나 검색 조건(정렬)이 바뀌면 버전을 올려 예전 캐시를 읽지 않게 한다
+        key = f"places:v3:{digest}"
 
         cached = await self._cache.get(key)
         if cached is not None:

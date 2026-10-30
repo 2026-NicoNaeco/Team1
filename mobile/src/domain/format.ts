@@ -56,6 +56,18 @@ export function formatKm(km: number): string {
   return `${km.toFixed(1)}km`;
 }
 
+/**
+ * 진행률(0~1)을 화면용 퍼센트로 바꾼다.
+ * 도착하지 않았다면 반올림으로 100% 가 되지 않게 내림하고 99% 를 넘지 않게 한다.
+ * (도착 직전에 끝내고 "중간에 끝냈어요 (100% 진행)"이 나오는 모순을 막는다)
+ */
+export function progressPercent(fraction: number, arrived = false): number {
+  if (arrived) return 100;
+  const f = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
+  // 0.29 * 100 = 28.999… 처럼 부동소수점 오차로 한 칸 모자라지 않게 아주 작은 값을 더한다
+  return Math.min(99, Math.floor(f * 100 + 1e-9));
+}
+
 export function formatWon(won: number): string {
   return `${Math.round(won).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}원`;
 }

@@ -22,6 +22,11 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
+export interface RouteRequestOptions extends RequestOptions {
+  /** 운전 성향. 성향으로 후보를 고르는 제공자(백엔드)만 쓴다 */
+  preferences?: EffectivePreferences;
+}
+
 // ───────────── 장소 검색 ─────────────
 
 export interface PlaceSearchProvider {
@@ -31,11 +36,16 @@ export interface PlaceSearchProvider {
   search(query: string, options?: RequestOptions): Promise<Place[]>;
   /** 처음 화면에서 고를 수 있는 샘플 장소 */
   listSamples(options?: RequestOptions): Promise<Place[]>;
+  /**
+   * 이 제공자로 경로를 찾을 수 있는 장소인지. 다른 데이터로 저장된 최근 목적지(예: 데모 도시)를 걸러 낼 때 쓴다.
+   * 없으면 모두 쓸 수 있다고 본다.
+   */
+  isServiceable?(place: Place): boolean;
 }
 
 // ───────────── 경로 조회 ─────────────
 
-export type RouteProviderErrorCode = 'NETWORK' | 'TIMEOUT' | 'SAME_LOCATION' | 'UNSUPPORTED';
+export type RouteProviderErrorCode = 'NETWORK' | 'TIMEOUT' | 'SAME_LOCATION' | 'UNSUPPORTED' | 'OUT_OF_SERVICE_AREA' | 'ROUTE_NOT_FOUND';
 
 export class RouteProviderError extends Error {
   readonly code: RouteProviderErrorCode;
@@ -56,7 +66,11 @@ export interface RouteProvider {
    * 후보가 없으면 candidates 가 빈 배열이다 (오류가 아니다).
    * 순위·추천 이유는 여기서 만들지 않는다 (RecommendationService 의 책임).
    */
-  findRoutes(origin: Place, destination: Place, options?: RequestOptions): Promise<RouteSearchResult>;
+  findRoutes(origin: Place, destination: Place, options?: RouteRequestOptions): Promise<RouteSearchResult>;
+  /**
+   * true 면 후보 자체가 운전 성향에 따라 달라진다. 설정이 바뀌면 순위만 다시 매기지 않고 후보를 다시 받아 온다.
+   */
+  readonly candidatesDependOnPreferences?: boolean;
 }
 
 // ───────────── 추천 ─────────────
@@ -65,6 +79,8 @@ export interface RecommendationInput {
   candidates: readonly RouteCandidate[];
   preferences: EffectivePreferences;
   excluded?: readonly ExcludedRoute[];
+  /** 실제 최단 시간(초). RouteSearchResult.fastestDurationS 를 그대로 넘긴다 */
+  fastestDurationS?: number;
 }
 
 export interface RecommendationService {

@@ -1,0 +1,895 @@
+{
+ "routes": [
+  {
+   "route_id": "r_bf6fb0a8",
+   "label": "A",
+   "rank": 1,
+   "via": "이름 없는 도로",
+   "difficulty_score": 19.0,
+   "distance_m": 7003,
+   "duration_s": 840,
+   "extra_duration_s": 313,
+   "toll": {
+    "availability": "unknown"
+   },
+   "polyline": "e|quE{lfeW}PfDk[gDyZcB|DsYB_a@gD{WdAob@p@oa@e@oZr@s^}B{ZgSiAmAs^iAi`@{@oXoVqB",
+   "factors": {
+    "TURN_COUNT": {
+     "availability": "known",
+     "value": 4,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "UNPROTECTED_LEFT": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "U_TURN": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "SHARP_TURN": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ROUNDABOUT": {
+     "availability": "known",
+     "value": 1,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "LANE_CHANGE": {
+     "availability": "unknown",
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     }
+    },
+    "MERGE_DIVERGE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "LANE_COUNT": {
+     "availability": "known",
+     "value": 2,
+     "unit": "lanes",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "NARROW_ROAD": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "UNPAVED_ROAD": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ROAD_TYPE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "TRAFFIC_LIGHT": {
+     "availability": "known",
+     "value": 9,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "TRAFFIC_VOLUME": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "PROTECTED_ZONE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ACCIDENT_ZONE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    }
+   },
+   "hotspots": [
+    {
+     "code": "ROUNDABOUT",
+     "lat": 35.173711999999995,
+     "lng": 126.89241849999999,
+     "note": "회전교차로"
+    }
+   ],
+   "steps": [
+    {
+     "index": 0,
+     "maneuver": "DEPART",
+     "instruction": "출발",
+     "lat": 35.158587,
+     "lng": 126.850224,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 0,
+     "distance_m": 1337,
+     "duration_s": 160,
+     "turn_angle_deg": 0.0,
+     "factors": {
+      "TRAFFIC_LIGHT": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 1,
+     "maneuver": "SHARP_RIGHT",
+     "instruction": "급우회전",
+     "lat": 35.170454,
+     "lng": 126.850715,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 1337,
+     "distance_m": 3563,
+     "duration_s": 428,
+     "turn_angle_deg": 100.1,
+     "factors": {
+      "TURN_COUNT": 1,
+      "TRAFFIC_LIGHT": 5
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 2,
+     "maneuver": "LEFT",
+     "instruction": "좌회전",
+     "lat": 35.170276,
+     "lng": 126.889522,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 4899,
+     "distance_m": 362,
+     "duration_s": 43,
+     "turn_angle_deg": -75.0,
+     "factors": {
+      "TURN_COUNT": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 3,
+     "maneuver": "ROUNDABOUT",
+     "instruction": "회전교차로 진입",
+     "lat": 35.173516,
+     "lng": 126.88989,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 5261,
+     "distance_m": 1320,
+     "duration_s": 158,
+     "turn_angle_deg": 79.3,
+     "factors": {
+      "TURN_COUNT": 1,
+      "ROUNDABOUT": 1,
+      "TRAFFIC_LIGHT": 2
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 4,
+     "maneuver": "LEFT",
+     "instruction": "좌회전",
+     "lat": 35.174581,
+     "lng": 126.904357,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 6582,
+     "distance_m": 421,
+     "duration_s": 51,
+     "turn_angle_deg": -77.7,
+     "factors": {
+      "TURN_COUNT": 1,
+      "TRAFFIC_LIGHT": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 5,
+     "maneuver": "ARRIVE",
+     "instruction": "목적지 도착",
+     "lat": 35.178341,
+     "lng": 126.904928,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 7003,
+     "distance_m": 0,
+     "duration_s": 0,
+     "turn_angle_deg": 0.0,
+     "factors": {},
+     "unknown_factors": []
+    }
+   ]
+  },
+  {
+   "route_id": "r_0968a4ed",
+   "label": "B",
+   "rank": 2,
+   "via": "이름 없는 도로",
+   "difficulty_score": 24.2,
+   "distance_m": 7162,
+   "duration_s": 859,
+   "extra_duration_s": 332,
+   "toll": {
+    "availability": "unknown"
+   },
+   "polyline": "e|quE{lfeWfBw^cAc_@rCyVUs`@sY_FwWhCyWCmU{BgBsYs@o^Ec[hDu`@{XHd@a^}Ea]n@e`@",
+   "factors": {
+    "TURN_COUNT": {
+     "availability": "known",
+     "value": 4,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "UNPROTECTED_LEFT": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "U_TURN": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "SHARP_TURN": {
+     "availability": "known",
+     "value": 1,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ROUNDABOUT": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "LANE_CHANGE": {
+     "availability": "unknown",
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     }
+    },
+    "MERGE_DIVERGE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "LANE_COUNT": {
+     "availability": "known",
+     "value": 2,
+     "unit": "lanes",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "NARROW_ROAD": {
+     "availability": "known",
+     "value": 0.92,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "UNPAVED_ROAD": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ROAD_TYPE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "TRAFFIC_LIGHT": {
+     "availability": "known",
+     "value": 5,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "TRAFFIC_VOLUME": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "PROTECTED_ZONE": {
+     "availability": "known",
+     "value": 1,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ACCIDENT_ZONE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    }
+   },
+   "hotspots": [
+    {
+     "code": "NARROW_ROAD",
+     "lat": 35.1582395,
+     "lng": 126.8578685,
+     "note": "좁은 도로"
+    },
+    {
+     "code": "PROTECTED_ZONE",
+     "lat": 35.158043,
+     "lng": 126.8623465,
+     "note": "보호구역"
+    },
+    {
+     "code": "SHARP_TURN",
+     "lat": 35.175585999999996,
+     "lng": 126.889866,
+     "note": "급커브 구간"
+    },
+    {
+     "code": "NARROW_ROAD",
+     "lat": 35.177563,
+     "lng": 126.892324,
+     "note": "좁은 도로"
+    }
+   ],
+   "steps": [
+    {
+     "index": 0,
+     "maneuver": "DEPART",
+     "instruction": "출발",
+     "lat": 35.158587,
+     "lng": 126.850224,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 0,
+     "distance_m": 1779,
+     "duration_s": 213,
+     "turn_angle_deg": 0.0,
+     "factors": {
+      "NARROW_ROAD": 0.47,
+      "TRAFFIC_LIGHT": 1,
+      "PROTECTED_ZONE": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 1,
+     "maneuver": "LEFT",
+     "instruction": "좌회전",
+     "lat": 35.157779,
+     "lng": 126.869628,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 1779,
+     "distance_m": 1774,
+     "duration_s": 213,
+     "turn_angle_deg": -76.4,
+     "factors": {
+      "TURN_COUNT": 1,
+      "TRAFFIC_LIGHT": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 2,
+     "maneuver": "RIGHT",
+     "instruction": "우회전",
+     "lat": 35.173559,
+     "lng": 126.870697,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 3553,
+     "distance_m": 1759,
+     "duration_s": 211,
+     "turn_angle_deg": 73.4,
+     "factors": {
+      "TURN_COUNT": 1,
+      "TRAFFIC_LIGHT": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 3,
+     "maneuver": "SHARP_LEFT",
+     "instruction": "급좌회전",
+     "lat": 35.173516,
+     "lng": 126.88989,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 5312,
+     "distance_m": 460,
+     "duration_s": 55,
+     "turn_angle_deg": -101.5,
+     "factors": {
+      "TURN_COUNT": 1,
+      "SHARP_TURN": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 4,
+     "maneuver": "RIGHT",
+     "instruction": "우회전",
+     "lat": 35.177656,
+     "lng": 126.889842,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 5772,
+     "distance_m": 1389,
+     "duration_s": 167,
+     "turn_angle_deg": 93.2,
+     "factors": {
+      "TURN_COUNT": 1,
+      "NARROW_ROAD": 0.45,
+      "TRAFFIC_LIGHT": 2
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 5,
+     "maneuver": "ARRIVE",
+     "instruction": "목적지 도착",
+     "lat": 35.178341,
+     "lng": 126.904928,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 7162,
+     "distance_m": 0,
+     "duration_s": 0,
+     "turn_angle_deg": 0.0,
+     "factors": {},
+     "unknown_factors": []
+    }
+   ]
+  },
+  {
+   "route_id": "r_8902b845",
+   "label": "C",
+   "rank": 3,
+   "via": "이름 없는 도로",
+   "difficulty_score": 17.3,
+   "distance_m": 8126,
+   "duration_s": 975,
+   "extra_duration_s": 448,
+   "toll": {
+    "availability": "unknown"
+   },
+   "polyline": "e|quE{lfeW|Y^y@u\\dBwb@Oq^Hu\\|BmYy@_a@p@q[Cu^eZkEaWtAd@e\\qAmc@eBiWeUuEcXbGo[DoVqB",
+   "factors": {
+    "TURN_COUNT": {
+     "availability": "known",
+     "value": 4,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "UNPROTECTED_LEFT": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "U_TURN": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "SHARP_TURN": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ROUNDABOUT": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "LANE_CHANGE": {
+     "availability": "unknown",
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     }
+    },
+    "MERGE_DIVERGE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "LANE_COUNT": {
+     "availability": "known",
+     "value": 2,
+     "unit": "lanes",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "NARROW_ROAD": {
+     "availability": "known",
+     "value": 0.43,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "UNPAVED_ROAD": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ROAD_TYPE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "TRAFFIC_LIGHT": {
+     "availability": "known",
+     "value": 6,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "TRAFFIC_VOLUME": {
+     "availability": "known",
+     "value": 0,
+     "unit": "km",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "PROTECTED_ZONE": {
+     "availability": "known",
+     "value": 1,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    },
+    "ACCIDENT_ZONE": {
+     "availability": "known",
+     "value": 0,
+     "unit": "count",
+     "source": {
+      "kind": "demo_sample",
+      "name": "개발용 샘플 도로망"
+     },
+     "verification": "unverified"
+    }
+   },
+   "hotspots": [
+    {
+     "code": "PROTECTED_ZONE",
+     "lat": 35.154102,
+     "lng": 126.86305300000001,
+     "note": "보호구역"
+    },
+    {
+     "code": "NARROW_ROAD",
+     "lat": 35.1541175,
+     "lng": 126.867953,
+     "note": "좁은 도로"
+    }
+   ],
+   "steps": [
+    {
+     "index": 0,
+     "maneuver": "DEPART",
+     "instruction": "출발",
+     "lat": 35.158587,
+     "lng": 126.850224,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 0,
+     "distance_m": 480,
+     "duration_s": 58,
+     "turn_angle_deg": 0.0,
+     "factors": {},
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 1,
+     "maneuver": "LEFT",
+     "instruction": "좌회전",
+     "lat": 35.154276,
+     "lng": 126.850058,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 480,
+     "distance_m": 3612,
+     "duration_s": 433,
+     "turn_angle_deg": -96.1,
+     "factors": {
+      "TURN_COUNT": 1,
+      "NARROW_ROAD": 0.43,
+      "TRAFFIC_LIGHT": 1,
+      "PROTECTED_ZONE": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 2,
+     "maneuver": "LEFT",
+     "instruction": "좌회전",
+     "lat": 35.153521,
+     "lng": 126.889645,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 4091,
+     "distance_m": 922,
+     "duration_s": 111,
+     "turn_angle_deg": -78.8,
+     "factors": {
+      "TURN_COUNT": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 3,
+     "maneuver": "RIGHT",
+     "instruction": "우회전",
+     "lat": 35.16172,
+     "lng": 126.890226,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 5014,
+     "distance_m": 1315,
+     "duration_s": 158,
+     "turn_angle_deg": 98.1,
+     "factors": {
+      "TURN_COUNT": 1,
+      "TRAFFIC_LIGHT": 1
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 4,
+     "maneuver": "LEFT",
+     "instruction": "좌회전",
+     "lat": 35.162451,
+     "lng": 126.904621,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 6329,
+     "distance_m": 1797,
+     "duration_s": 216,
+     "turn_angle_deg": -67.2,
+     "factors": {
+      "TURN_COUNT": 1,
+      "TRAFFIC_LIGHT": 4
+     },
+     "unknown_factors": [
+      "LANE_CHANGE"
+     ]
+    },
+    {
+     "index": 5,
+     "maneuver": "ARRIVE",
+     "instruction": "목적지 도착",
+     "lat": 35.178341,
+     "lng": 126.904928,
+     "road_name": null,
+     "road_class": "LOCAL",
+     "offset_m": 8126,
+     "distance_m": 0,
+     "duration_s": 0,
+     "turn_angle_deg": 0.0,
+     "factors": {},
+     "unknown_factors": []
+    }
+   ]
+  }
+ ],
+ "excluded": []
+}

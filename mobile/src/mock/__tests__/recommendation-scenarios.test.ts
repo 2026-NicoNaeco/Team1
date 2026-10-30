@@ -7,6 +7,7 @@ import type { DriverProfile, RecommendationResult, RouteCandidate } from '../../
 import { computeRoutes, DEMO_GRAPH } from '../mockRouteProvider';
 import { PLACE_NODE } from '../places';
 import { PRESETS } from '../presets';
+import { HIDDEN_ROAD_INFO } from '../scenario';
 
 const NOW = '2026-10-08T09:00:00.000Z';
 const { candidates, excluded } = computeRoutes(DEMO_GRAPH, 'stn', PLACE_NODE['univ-gate']!);
@@ -203,3 +204,59 @@ describe('추천 입력을 바꾸지 않는다', () => {
 
 // 타입 확인용
 export type _Unused = RouteCandidate;
+
+describe('정보가 빠진 경로의 부담 표시', () => {
+  it('부담 계산에 쓰는 요소가 하나라도 확인되지 않은 경로만 "실제로는 더 높을 수 있다"고 표시한다', () => {
+    const result = run(profileOf());
+    for (const item of result.items) {
+      const c = candidates.find((x) => x.id === item.routeId)!;
+      const anyMissing = Object.values(FACTORS).some((f) => f.scored && c.factors[f.code].availability !== 'known');
+      expect(item.burdenMayBeHigher).toBe(anyMissing);
+    }
+  });
+
+  it('"일부 도로 정보 없음"이면 모든 경로를 하한으로 표시하고, 추천 경로는 그대로다 (모두 같은 정보가 빠졌으므로)', () => {
+    const hidden = computeRoutes(DEMO_GRAPH, 'stn', PLACE_NODE['univ-gate']!, { forceUnknown: HIDDEN_ROAD_INFO });
+    const prefs = resolvePreferences(profileOf(), emptyLearned());
+    const result = recommend(hidden.candidates, prefs, hidden.excluded);
+    expect(result.items.every((i) => i.burdenMayBeHigher)).toBe(true);
+    expect(hidden.candidates.find((c) => c.id === result.recommendedRouteId)?.label).toBe(recommendedLabel(run(profileOf())));
+  });
+});
+
+describe('가장 빠른 길이 후보에 없을 때 (성향을 반영해 후보를 고르는 제공자)', () => {
+  const fastestCandidate = [...candidates].sort((a, b) => a.durationS - b.durationS)[0]!;
+  const prefs = () => resolvePreferences(profileOf(), emptyLearned());
+
+  it('최단 시간을 주지 않으면 지금처럼 후보 중 가장 빠른 길이 기준이다', () => {
+    const result = recommend(candidates, prefs(), excluded);
+    expect(result.fastestRouteId).toBe(fastestCandidate.id);
+    expect(result.items.find((i) => i.routeId === fastestCandidate.id)!.extraMinutes).toBe(0);
+    expect(result.notices.some((n) => n.kind === 'fastest_not_included')).toBe(false);
+  });
+
+  it('실제 최단 시간이 더 짧으면 그 길을 기준으로 추가 시간을 계산하고, 어떤 후보도 "가장 빠름"이라 하지 않는다', () => {
+    const fastestDurationS = fastestCandidate.durationS - 5 * 60;
+    const result = recommend(candidates, prefs(), excluded, { fastestDurationS });
+    expect(result.fastestRouteId).toBeNull();
+    for (const item of result.items) {
+      expect(item.extraMinutes).toBeGreaterThanOrEqual(5);
+      expect(item.headline).not.toBe('가장 빠른 길');
+      expect(item.reasons.some((r) => r.kind === 'fastest')).toBe(false);
+    }
+    const notice = result.notices.find((n) => n.kind === 'fastest_not_included');
+    expect(notice?.text).toContain('가장 빠른 길');
+  });
+
+  it('허용 시간 안에 드는 후보가 없으면 추천하지 않고 그 이유를 알린다 (조건을 몰래 완화하지 않는다)', () => {
+    const fastestDurationS = fastestCandidate.durationS - 30 * 60;
+    const result = recommend(candidates, prefs(), excluded, { fastestDurationS });
+    expect(result.recommendedRouteId).toBeNull();
+    expect(result.notices.find((n) => n.kind === 'fastest_not_included')?.text).toContain('맞춤 추천을 정하지 않았어요');
+  });
+
+  it('최단 시간이 후보보다 길게 와도(반올림 등) 후보 중 가장 빠른 길을 기준으로 둔다', () => {
+    const result = recommend(candidates, prefs(), excluded, { fastestDurationS: fastestCandidate.durationS + 120 });
+    expect(result.fastestRouteId).toBe(fastestCandidate.id);
+  });
+});

@@ -3,6 +3,7 @@ import {
   LEARNING_DELTA_MIN,
   LEARNING_ESTABLISHED_FEEDBACK_COUNT,
   applyLearning,
+  describeAdjustment,
   emptyLearned,
   learningStatus,
   previewLearning,
@@ -138,5 +139,23 @@ describe('학습 상태 문구', () => {
       learned = applyLearning(profile(), learned, hard('U_TURN'), NOW).learned;
     }
     expect(learningStatus(learned).phase).toBe('established');
+  });
+});
+
+describe('조정값 문구 (describeAdjustment)', () => {
+  it('내부 수치 대신 문장으로 말한다', () => {
+    expect(describeAdjustment(0.4)).toBe('조금 더 피해요');
+    expect(describeAdjustment(0.8)).toBe('많이 더 피해요');
+    expect(describeAdjustment(0.4 + 0.4)).toBe('많이 더 피해요'); // 부동소수점 합도 같은 결과
+    expect(describeAdjustment(LEARNING_DELTA_MAX)).toBe('많이 더 피해요');
+    expect(describeAdjustment(-0.2)).toBe('조금 덜 피해요');
+    expect(describeAdjustment(LEARNING_DELTA_MIN)).toBe('조금 덜 피해요');
+    expect(describeAdjustment(0)).toBe('평가가 서로 상쇄돼 그대로예요');
+  });
+
+  it('숫자를 포함하지 않는다', () => {
+    for (const d of [LEARNING_DELTA_MIN, -0.2, 0, 0.2, 0.4, 0.8, LEARNING_DELTA_MAX]) {
+      expect(describeAdjustment(d)).not.toMatch(/[0-9]/);
+    }
   });
 });

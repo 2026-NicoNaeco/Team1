@@ -166,6 +166,11 @@ export interface ExcludedRoute {
 export interface RouteSearchResult {
   candidates: RouteCandidate[];
   excluded: ExcludedRoute[];
+  /**
+   * 출발지·목적지 사이 실제 최단 시간(초). 성향을 반영해 후보를 고르는 제공자(백엔드)는 가장 빠른 길이 후보에 없을 수 있어
+   * 이 값을 함께 준다. 없으면 후보 중 가장 빠른 길을 기준으로 삼는다.
+   */
+  fastestDurationS?: number;
 }
 
 // ───────────────────────── 사용자 성향 ─────────────────────────
@@ -272,6 +277,8 @@ export interface RankedRoute {
   extraMinutes: number;
   durationMinutes: number;
   burdenLevel: BurdenLevel;
+  /** 부담 계산에 쓰는 요소 중 정보가 없거나 일부만 확인된 것이 있어, 실제 부담은 이보다 높을 수 있다 */
+  burdenMayBeHigher: boolean;
   /** 부담에 가장 크게 반영된 요소 (최대 2개). 예: "비보호 좌회전 2회" */
   burdenDrivers: { factor: FactorCode; text: string }[];
   /** 부담을 판단할 때 확인되지 않은 정보가 있었는지 */
@@ -284,7 +291,7 @@ export interface RankedRoute {
 }
 
 export interface RecommendationNotice {
-  kind: 'over_limit' | 'excluded_restricted' | 'single_candidate' | 'missing_info';
+  kind: 'over_limit' | 'excluded_restricted' | 'single_candidate' | 'missing_info' | 'fastest_not_included';
   text: string;
   /** over_limit 일 때 제외된 경로 id */
   routeIds?: string[];

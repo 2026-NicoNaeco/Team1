@@ -15,15 +15,20 @@ const LEVEL_TONE: Record<BurdenLevel, { fg: string; bg: string }> = {
   high: { fg: colors.warn, bg: colors.warnBg },
 };
 
-export function burdenLabel(level: BurdenLevel): string {
-  return LEVEL_LABEL[level];
+/**
+ * 부담 수준 글자. 확인하지 못한 정보가 있으면 계산한 수준은 하한이므로 "보통 이상"처럼 쓴다.
+ * (가장 높은 "높음"은 그대로 둔다)
+ */
+export function burdenLabel(level: BurdenLevel, mayBeHigher = false): string {
+  return mayBeHigher && level !== 'high' ? `${LEVEL_LABEL[level]} 이상` : LEVEL_LABEL[level];
 }
 
-export function BurdenMeter({ level, compact = false }: { level: BurdenLevel; compact?: boolean }) {
+export function BurdenMeter({ level, compact = false, mayBeHigher = false }: { level: BurdenLevel; compact?: boolean; mayBeHigher?: boolean }) {
   const count = LEVEL_COUNT[level];
   const tone = LEVEL_TONE[level];
+  const text = burdenLabel(level, mayBeHigher);
   return (
-    <View accessible accessibilityLabel={`예상 운전 부담 ${LEVEL_LABEL[level]}`} style={[styles.pill, { backgroundColor: tone.bg }]}>
+    <View accessible accessibilityLabel={`예상 운전 부담 ${text}`} style={[styles.pill, { backgroundColor: tone.bg }]}>
       <View style={styles.bars}>
         {[1, 2, 3].map((n) => (
           <View key={n} style={[styles.bar, { backgroundColor: n <= count ? tone.fg : 'rgba(25, 31, 40, 0.14)' }]} />
@@ -35,7 +40,7 @@ export function BurdenMeter({ level, compact = false }: { level: BurdenLevel; co
         </Text>
       )}
       <Text variant="captionStrong" color={tone.fg}>
-        {LEVEL_LABEL[level]}
+        {text}
       </Text>
     </View>
   );

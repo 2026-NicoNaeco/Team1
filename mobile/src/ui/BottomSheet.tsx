@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode, type Ref } from 'react';
 import { Animated, Easing, PanResponder, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { colors, radius, shadow, space } from '../design/tokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -14,6 +14,8 @@ export interface BottomSheetProps {
   children: ReactNode;
   /** 손잡이 접근성 라벨 */
   handleLabel?: string;
+  /** 본문 스크롤을 부모가 움직일 때 (예: 고른 경로의 카드로 이동) */
+  scrollRef?: Ref<ScrollView>;
   testID?: string;
 }
 
@@ -31,7 +33,7 @@ const TAP_SLOP = 5;
  * - 헤더의 나머지 영역은 위아래로 움직이기 시작하면 가져간다 (헤더 안의 버튼 탭은 그대로 동작한다).
  * - 한 번 가져간 제스처는 지도 등 다른 영역이 빼앗지 못한다.
  */
-export function BottomSheet({ snapHeights, index, onIndexChange, header, children, handleLabel, testID }: BottomSheetProps) {
+export function BottomSheet({ snapHeights, index, onIndexChange, header, children, handleLabel, scrollRef, testID }: BottomSheetProps) {
   const reducedMotion = useReducedMotion();
   const maxHeight = snapHeights[snapHeights.length - 1] ?? 0;
   const translateFor = (i: number) => maxHeight - (snapHeights[i] ?? snapHeights[0] ?? 0);
@@ -142,6 +144,7 @@ export function BottomSheet({ snapHeights, index, onIndexChange, header, childre
       </View>
       <View style={styles.body} aria-hidden={collapsed}>
         <ScrollView
+          ref={scrollRef}
           scrollEnabled={!collapsed}
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}

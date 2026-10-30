@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { BackHandler, ScrollView, StyleSheet, View } from 'react-native';
 import { FACTOR_ORDER, FACTORS } from '../domain/factors';
-import { factorSummary, formatDistance, formatMinutes, placeLabel } from '../domain/format';
+import { factorSummary, formatDistance, formatMinutes, placeLabel, progressPercent } from '../domain/format';
 import { previewLearning } from '../domain/learning';
 import { createSimulationRecord } from '../domain/records';
 import type { FactorCode, Feedback, FeedbackRating } from '../domain/types';
@@ -54,6 +55,16 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
   const [factors, setFactors] = useState<FactorCode[]>([]);
   const [apply, setApply] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // 안드로이드 뒤로 가기: 이 화면을 그냥 빠져나가면 방금 한 주행의 기록과 평가가 사라진다.
+  // 그래서 "마치기"와 같게 처리한다. 표시할 주행이 없을 때는 기본 동작(이전 화면)을 따른다.
+  const onBack = useRef<() => boolean>(() => false);
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => onBack.current());
+      return () => sub.remove();
+    }, []),
+  );
 
   const options = useMemo(
     () =>
@@ -132,6 +143,10 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
     setSaving(false);
     leave();
   };
+  onBack.current = () => {
+    void finish();
+    return true;
+  };
 
   const restart = (fromProgressM: number) => {
     const routeId = run.route.id;
@@ -148,7 +163,7 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
             {arrived ? '도착했어요!' : '안내를 끝냈어요'}
           </Text>
           <Text variant="body" color={colors.textSecondary} align="center">
-            {arrived ? '수고하셨어요. 이번 길은 어땠는지 알려 주세요.' : `중간에 끝냈어요 (${Math.round(run.progress * 100)}% 진행).`}
+            {arrived ? '수고하셨어요. 이번 길은 어땠는지 알려 주세요.' : `중간에 끝냈어요 (${progressPercent(run.progress)}% 진행).`}
           </Text>
         </View>
 

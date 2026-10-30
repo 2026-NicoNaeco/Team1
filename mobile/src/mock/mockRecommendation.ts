@@ -8,6 +8,6 @@ import type { RecommendationResult } from '../domain/types';
  */
 export class DemoRecommendationService implements RecommendationService {
   async recommend(input: RecommendationInput): Promise<RecommendationResult> {
-    return recommend(input.candidates, input.preferences, input.excluded ?? []);
+    return recommend(input.candidates, input.preferences, input.excluded ?? [], { fastestDurationS: input.fastestDurationS });
   }
 }

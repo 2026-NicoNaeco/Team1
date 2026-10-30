@@ -13,6 +13,7 @@ import type { TabScreenProps } from '../navigation/types';
 import { getServices } from '../services';
 import { useAppStore } from '../state/appStore';
 import { useTripStore } from '../state/tripStore';
+import { BottomSheet } from '../ui/BottomSheet';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -21,6 +22,11 @@ import { PlaceRow } from '../ui/PlaceRow';
 import { PressableScale } from '../ui/PressableScale';
 import { SearchButton } from '../ui/SearchField';
 import { Text } from '../ui/Text';
+
+/** BottomSheet 의 손잡이 영역 높이 */
+const SHEET_HANDLE = 24;
+/** 시트를 펼쳤을 때 지도가 이보다 좁아지면, 처음에는 접은 채로 보여 준다 (작은 화면) */
+const MIN_MAP_HEIGHT = 160;
 
 /** 내 운전 성향을 한 줄로 요약한다 (피하고 싶은 요소 + 허용 추가 시간) */
 function preferenceSummary(priorities: Partial<Record<FactorCode, string>>, maxExtraMinutes: number): string {
@@ -35,6 +41,7 @@ function preferenceSummary(priorities: Partial<Record<FactorCode, string>>, maxE
 
 /**
  * 홈: 지도 위에 검색창을 띄우고, 아래 시트에서 내 운전 성향과 갈 만한 곳을 보여준다.
+ * 시트는 경로 비교 화면처럼 끌어서 접고 펼 수 있다. 접으면 내 운전 성향 카드까지만 보여 지도가 넓어진다.
  * 환영 문구나 통계가 검색과 지도를 밀어내지 않는다. 기록이 없어도 바로 다음 행동을 할 수 있다.
  */
 export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
@@ -45,7 +52,12 @@ export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
   const destination = useTripStore((s) => s.destination);
   const setDestination = useTripStore((s) => s.setDestination);
   const profile = useAppStore((s) => s.profile);
-  const recents = useAppStore((s) => s.recents);
+  const storedRecents = useAppStore((s) => s.recents);
+  // 다른 데이터(예: 데모 도시)로 저장된 최근 목적지는 지금 제공자로 경로를 찾을 수 없으니 보여 주지 않는다
+  const recents = useMemo(() => {
+    const places = getServices().places;
+    return places.isServiceable ? storedRecents.filter((p) => places.isServiceable!(p)) : storedRecents;
+  }, [storedRecents]);
   const persistenceError = useAppStore((s) => s.persistence.status === 'error');
   const retryPersist = useAppStore((s) => s.retryPersist);
   const discarded = useAppStore((s) => s.discardedOnLoad);
@@ -54,6 +66,10 @@ export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
   const [topHeight, setTopHeight] = useState(0);
   const [bottomHeight, setBottomHeight] = useState(0);
   const [rootHeight, setRootHeight] = useState(0);
+  const [sheetHeaderHeight, setSheetHeaderHeight] = useState(0);
+  const [sheetBodyHeight, setSheetBodyHeight] = useState(0);
+  /** 사용자가 끌거나 눌러서 정한 시트 단계. 정하기 전(null)에는 화면 크기에 맞춰 정한다 */
+  const [userSheetIndex, setUserSheetIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -99,13 +115,24 @@ export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
   const rowCount = fontScale > 1.3 ? 1 : windowHeight < 700 ? 2 : 3;
   const panelMax = rootHeight > 0 ? Math.max(180, rootHeight - topHeight - space.lg) : undefined;
 
+  // 시트 높이: 접으면 손잡이 + 내 운전 성향 카드, 펼치면 갈 만한 곳(+ 본문 아래 여백)까지. 펼친 높이는 검색창 아래까지로 제한한다.
+  const peekHeight = SHEET_HANDLE + sheetHeaderHeight;
+  const fullHeight = Math.min(panelMax ?? Infinity, SHEET_HANDLE + sheetHeaderHeight + sheetBodyHeight + space.xl);
+  const snapHeights = fullHeight - peekHeight >= 48 ? [peekHeight, fullHeight] : [Math.max(peekHeight, fullHeight)];
+  const measured = rootHeight > 0 && topHeight > 0 && sheetHeaderHeight > 0 && sheetBodyHeight > 0;
+  // 사용자가 정하기 전에는, 펼치면 지도가 너무 좁아지는 작은 화면에서 접은 채로 보여 준다.
+  // (효과로 한 번만 정하면 측정이 덜 끝난 값으로 굳어질 수 있어서, 렌더링마다 측정값으로 계산한다)
+  const autoIndex = measured && snapHeights.length > 1 && rootHeight - topHeight - fullHeight < MIN_MAP_HEIGHT ? 0 : 1;
+  const sheetIdx = Math.min(userSheetIndex ?? autoIndex, snapHeights.length - 1);
+  const mapBottom = destination ? bottomHeight : (snapHeights[sheetIdx] ?? 0);
+
   return (
     <View style={styles.root} onLayout={(e) => setRootHeight(e.nativeEvent.layout.height)}>
       <MapView
         routes={[]}
         markers={markers}
         camera={camera}
-        insets={{ top: topHeight + space.sm, bottom: bottomHeight + space.sm, left: 0, right: 0 }}
+        insets={{ top: topHeight + space.sm, bottom: mapBottom + space.sm, left: 0, right: 0 }}
         accessibilityLabel={`지도. 출발지는 ${placeLabel(origin.name)}${destination ? `, 목적지는 ${destination.name}` : ''}입니다.`}
         testID="home-map"
       />
@@ -149,16 +176,15 @@ export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
         ) : null}
       </View>
 
-      <View style={styles.bottomWrap}>
-        <View style={[styles.panel, shadow.sheet, panelMax ? { maxHeight: panelMax } : null]} onLayout={(e) => setBottomHeight(e.nativeEvent.layout.height)}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.panelContent}
-          >
-          {destination ? (
-            <>
+      {destination ? (
+        <View style={styles.bottomWrap}>
+          <View style={[styles.panel, shadow.sheet, panelMax ? { maxHeight: panelMax } : null]} onLayout={(e) => setBottomHeight(e.nativeEvent.layout.height)}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.panelContent}
+            >
               <View style={styles.continueText}>
                 <Text variant="captionStrong" color={colors.primaryStrong}>
                   이어서 볼까요?
@@ -172,15 +198,23 @@ export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
               </View>
               <Button title="경로 비교 보기" icon="route" onPress={() => navigation.navigate('RouteCompare')} testID="home-continue" />
               <Button title="다른 목적지 찾기" variant="tertiary" onPress={() => navigation.navigate('Search', { mode: 'destination' })} />
-            </>
-          ) : (
-            <>
+            </ScrollView>
+          </View>
+        </View>
+      ) : (
+        <BottomSheet
+          testID="home-sheet"
+          snapHeights={snapHeights}
+          index={sheetIdx}
+          onIndexChange={setUserSheetIndex}
+          handleLabel={sheetIdx === 0 && snapHeights.length > 1 ? '갈 만한 곳 펼치기' : snapHeights.length > 1 ? '갈 만한 곳 접기' : undefined}
+          header={
+            <View style={styles.sheetHeader} onLayout={(e) => setSheetHeaderHeight(e.nativeEvent.layout.height)}>
               <Card
                 tone="tint"
                 onPress={() => navigation.navigate('Preferences')}
                 accessibilityHint="누르면 운전 성향을 바꿔요"
                 testID="home-preferences"
-                style={styles.prefCard}
               >
                 <View style={styles.prefRow}>
                   <View style={styles.prefIcon}>
@@ -190,41 +224,44 @@ export function MapHomeScreen({ navigation }: TabScreenProps<'Map'>) {
                     <Text variant="captionStrong" color={colors.primaryStrong}>
                       내 운전 성향
                     </Text>
-                    <Text variant="bodyStrong" numberOfLines={2}>
+                    {/* 큰 글자에서는 줄 수를 제한하지 않는다. 말줄임으로 끝의 "최대 +N분"이 사라지지 않게 한다. */}
+                    <Text variant="bodyStrong" numberOfLines={fontScale > 1.3 ? undefined : 2}>
                       {preferenceSummary(profile.priorities, profile.maxExtraMinutes)}
                     </Text>
                   </View>
                   <Icon name="chevron-right" size={20} color={colors.textTertiary} />
                 </View>
               </Card>
-
-              <Text variant="heading" accessibilityRole="header" style={styles.listTitle}>
-                {recents.length > 0 ? '최근 목적지' : '이런 곳은 어때요?'}
-              </Text>
-              <View>
-                {quickPlaces.slice(0, rowCount).map((place) => (
-                  <PlaceRow
-                    key={place.id}
-                    testID={`place-${place.id}`}
-                    variant="plain"
-                    name={place.name}
-                    subtitle={`${CATEGORY_LABEL[place.category]} · ${formatDistance(haversineM(origin.location, place.location))}`}
-                    accessibilityHint="누르면 이 장소로 가는 경로를 비교해요"
-                    onPress={() => choose(place)}
-                  />
-                ))}
-              </View>
-            </>
-          )}
-          </ScrollView>
-        </View>
-      </View>
+            </View>
+          }
+        >
+          <View style={styles.sheetBody} onLayout={(e) => setSheetBodyHeight(e.nativeEvent.layout.height)}>
+            <Text variant="heading" accessibilityRole="header" style={styles.listTitle}>
+              {recents.length > 0 ? '최근 목적지' : '이런 곳은 어때요?'}
+            </Text>
+            <View>
+              {quickPlaces.slice(0, rowCount).map((place) => (
+                <PlaceRow
+                  key={place.id}
+                  testID={`place-${place.id}`}
+                  variant="plain"
+                  name={place.name}
+                  subtitle={`${CATEGORY_LABEL[place.category]} · ${formatDistance(haversineM(origin.location, place.location))}`}
+                  accessibilityHint="누르면 이 장소로 가는 경로를 비교해요"
+                  onPress={() => choose(place)}
+                />
+              ))}
+            </View>
+          </View>
+        </BottomSheet>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  // 아래 시트(BottomSheet)가 부모 밖으로 내려간 부분을 숨긴다
+  root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
   top: {
     position: 'absolute',
     top: 0,
@@ -261,9 +298,10 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   continueText: { gap: space.xs, marginBottom: space.sm },
-  prefCard: { marginBottom: space.xs },
+  sheetHeader: { paddingHorizontal: layout.screenX, paddingTop: space.xs, paddingBottom: space.sm },
+  sheetBody: { paddingHorizontal: layout.screenX },
   prefRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   prefIcon: { width: 40, height: 40, borderRadius: radius.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   prefText: { flex: 1, gap: 2 },
-  listTitle: { marginTop: space.md, marginBottom: space.xs },
+  listTitle: { marginTop: space.sm, marginBottom: space.xs },
 });

@@ -28,7 +28,7 @@ pytest
 | Method | Endpoint | 설명 |
 |---|---|---|
 | GET | `/v1/factors` | 난이도 요소 목록 |
-| GET | `/v1/places/search?q=&lat=&lng=&size=` | 장소 검색 (카카오 로컬 프록시, 캐시) |
+| GET | `/v1/places/search?q=&lat=&lng=&size=` | 장소 검색 (카카오 로컬 프록시, 캐시). `lat`·`lng` 를 주면 정확도순이되 근처를 먼저 주고 `distance_m` 을 채운다 (거리순은 이름이 일부만 맞는 근처 장소가 앞에 와서 쓰지 않는다) |
 | POST | `/v1/routes/search` | 쉬운 경로 탐색 |
 | POST | `/v1/routes/reroute` | 경로 이탈 시 재탐색 (`current`, `heading_deg`, `previous_polyline`) |
 | POST | `/v1/profile/analyze` | 운전 기록 요약 → 가중치 갱신 (저장 없음) |

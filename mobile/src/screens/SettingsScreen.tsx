@@ -1,37 +1,40 @@
 import { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { FACTORS } from '../domain/factors';
-import { learningStatus } from '../domain/learning';
+import { describeAdjustment, learningStatus } from '../domain/learning';
 import type { FactorCode } from '../domain/types';
 import { colors, layout, space } from '../design/tokens';
 import type { TabScreenProps } from '../navigation/types';
 import { useAppStore } from '../state/appStore';
 import { useTripStore } from '../state/tripStore';
 import { useUiStore } from '../state/uiStore';
-import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
-import { Notice } from '../ui/Notice';
+import { ConfirmSheet } from '../ui/ConfirmSheet';
+import type { IconName } from '../ui/Icon';
 import { Group, ListRow, SwitchRow } from '../ui/Rows';
 import { Screen, ScreenHeader } from '../ui/Screen';
 import { Text } from '../ui/Text';
 
 type Confirm = 'records' | 'learned' | 'all';
 
-const CONFIRM_COPY: Record<Confirm, { title: string; text: string; action: string }> = {
+const CONFIRM_COPY: Record<Confirm, { title: string; text: string; action: string; icon: IconName }> = {
   records: {
     title: '주행 기록을 모두 삭제할까요?',
     text: '저장된 주행 기록만 지워요. 운전 성향 설정과 추천에 반영된 취향은 그대로예요. 되돌릴 수 없어요.',
     action: '기록 삭제',
+    icon: 'trash',
   },
   learned: {
     title: '추천에 반영된 취향을 초기화할까요?',
     text: '평가로 조정된 값만 지워요. 직접 정한 설정과 기록은 그대로예요.',
     action: '취향 초기화',
+    icon: 'refresh',
   },
   all: {
     title: '모든 사용자 데이터를 삭제할까요?',
     text: '운전 성향, 주행 기록, 평가, 추천에 반영된 취향, 최근 목적지 같은 임시 저장값을 모두 지우고 처음 상태로 돌아가요. 되돌릴 수 없어요.',
     action: '모두 삭제',
+    icon: 'trash',
   },
 };
 
@@ -56,6 +59,10 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
   const unlockDevTools = useUiStore((s) => s.unlockDevTools);
 
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  // 시트가 닫히는 동안(페이드아웃)에도 문구가 비지 않도록 마지막으로 연 확인 종류를 기억한다
+  const shownConfirm = useRef<Confirm>('records');
+  if (confirm) shownConfirm.current = confirm;
+  const copy = CONFIRM_COPY[shownConfirm.current];
   const [busy, setBusy] = useState(false);
   const versionTaps = useRef<number[]>([]);
 
@@ -137,8 +144,8 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
             </Text>
             {adjustments.map((a) => (
               <Text key={a!.factor} variant="caption" color={colors.text}>
-                ‘{FACTORS[a!.factor as FactorCode].label}’ 피하는 정도 {a!.delta >= 0 ? '+' : ''}
-                {a!.delta.toFixed(1)} (어려웠어요 {a!.hardCount}번 · 쉬웠어요 {a!.easyCount}번)
+                ‘{FACTORS[a!.factor as FactorCode].label}’ {describeAdjustment(a!.delta)} (어려웠어요 {a!.hardCount}번 · 쉬웠어요{' '}
+                {a!.easyCount}번)
                 {profile.priorities[a!.factor] ? ' · 직접 정한 값이 우선해요' : ''}
               </Text>
             ))}
@@ -178,22 +185,6 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
               chevron={false}
             />
           </Group>
-          {confirm ? (
-            <View style={styles.confirm}>
-              <Notice tone="error" title={CONFIRM_COPY[confirm].title} text={CONFIRM_COPY[confirm].text} />
-              <View style={styles.confirmRow}>
-                <Button title="취소" variant="neutral" style={styles.flex} onPress={() => setConfirm(null)} />
-                <Button
-                  testID="confirm-delete"
-                  title={CONFIRM_COPY[confirm].action}
-                  variant="danger"
-                  style={styles.flex}
-                  loading={busy}
-                  onPress={() => void run()}
-                />
-              </View>
-            </View>
-          ) : null}
         </View>
 
         <View style={styles.section}>
@@ -221,16 +212,25 @@ export function SettingsScreen({ navigation }: TabScreenProps<'Settings'>) {
           </Group>
         </View>
       </ScrollView>
+
+      <ConfirmSheet
+        visible={confirm !== null}
+        title={copy.title}
+        message={copy.text}
+        confirmLabel={copy.action}
+        icon={copy.icon}
+        busy={busy}
+        onConfirm={() => void run()}
+        onCancel={() => setConfirm(null)}
+        confirmTestID="confirm-delete"
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   content: { paddingHorizontal: layout.screenX, paddingTop: space.sm, paddingBottom: space.xxl, gap: space.xl },
   section: { gap: space.sm },
   sectionLabel: { paddingHorizontal: space.xs },
   learned: { gap: space.xs },
-  confirm: { gap: space.md, marginTop: space.sm },
-  confirmRow: { flexDirection: 'row', gap: space.sm },
 });
