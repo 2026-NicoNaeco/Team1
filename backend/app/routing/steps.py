@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Sequence
 
 from app.domain.factors import SCORED_CODES, FactorCode
-from app.domain.models import Maneuver, Step
+from app.domain.models import Maneuver, RoadClass, Step
 from app.routing.cost import (
     SHARP_TURN_MIN_ANGLE,
     TURN_MIN_ANGLE,
@@ -21,6 +21,7 @@ from app.routing.cost import (
     is_reverse,
     road_transition,
     transition,
+    turn_delay_s,
 )
 from app.routing.geo import signed_turn_deg
 from app.routing.graph import Edge
@@ -53,11 +54,26 @@ def classify_maneuver(signed_angle: float, *, reverse: bool = False) -> Maneuver
     return Maneuver.STRAIGHT
 
 
+# 이름 없는 도로로 들어갈 때, 다음 도로명도 없으면 도로 종류로 안내한다
+UNNAMED_ROAD_LABEL: dict[RoadClass, str] = {
+    RoadClass.HIGHWAY: "고속도로",
+    RoadClass.RAMP: "진출입로",
+    RoadClass.ARTERIAL: "연결로",
+    RoadClass.COLLECTOR: "연결로",
+    RoadClass.LOCAL: "이면도로",
+}
+
+
 def instruction(maneuver: Maneuver, road_name: str | None) -> str:
     label = MANEUVER_LABEL[maneuver]
     if maneuver is Maneuver.ARRIVE or not road_name:
         return label
     return f"{label} · {road_name}"
+
+
+def _unnamed_target(road_class: RoadClass, next_name: str | None) -> str:
+    """이름 없는 도로(진출입로·골목 등)로 들어가는 단계의 안내 대상. 예: '테헤란로 방면'"""
+    return f"{next_name} 방면" if next_name else UNNAMED_ROAD_LABEL[road_class]
 
 
 def _step_starts(
@@ -91,8 +107,9 @@ def _step_starts(
             continue
 
         maneuver = classify_maneuver(angle, reverse=reverse)
-        if maneuver is Maneuver.STRAIGHT and cur.name == prev.name:
-            continue  # 같은 도로 직진 — 이전 단계에 합친다
+        if maneuver is Maneuver.STRAIGHT and (cur.name == prev.name or cur.name is None):
+            # 같은 도로 직진, 또는 이름 없는 짧은 구간으로 이어지는 직진 — 이전 단계에 합친다
+            continue
         starts.append((i, maneuver, 0.0 if maneuver is Maneuver.STRAIGHT else angle))
 
     return starts
@@ -100,21 +117,25 @@ def _step_starts(
 
 def _segment_factors(
     path: Sequence[Edge], begin: int, end: int, start_heading_deg: float | None
-) -> tuple[dict[FactorCode, float], tuple[FactorCode, ...]]:
-    """단계 구간 [begin, end) 의 점수 요소와, 자료가 전혀 없는 점수 요소."""
+) -> tuple[dict[FactorCode, float], tuple[FactorCode, ...], float]:
+    """단계 구간 [begin, end) 의 점수 요소, 자료가 전혀 없는 점수 요소, 소요 시간."""
     amounts: Counter[FactorCode] = Counter()
     known: set[FactorCode] = set(ALWAYS_KNOWN)
     left_turns = left_known = 0
+    duration = 0.0
     for i in range(begin, end):
         edge = path[i]
         prev = path[i - 1] if i > 0 else None
         t = transition(prev, edge)
         amounts.update(t.factors)
+        duration += t.delay_s + edge.travel_time_s
         if t.left_turn:
             left_turns += 1
             left_known += prev is not None and prev.unprotected_left is not None
         if i == 0 and start_heading_deg is not None:
-            amounts.update(heading_factors(start_heading_deg, edge))
+            opening = heading_factors(start_heading_deg, edge)
+            amounts.update(opening)
+            duration += turn_delay_s(opening)
         amounts.update(edge_amounts(edge))
         known |= edge.known
     if left_turns == 0 or left_known > 0:
@@ -122,7 +143,7 @@ def _segment_factors(
 
     factors = {code: round_amount(code, amounts[code]) for code in SCORED_CODES if amounts[code] > 0}
     unknown = tuple(code for code in SCORED_CODES if code not in known)
-    return factors, unknown
+    return factors, unknown, duration
 
 
 def build_steps(path: Sequence[Edge], start_heading_deg: float | None = None) -> tuple[Step, ...]:
@@ -135,10 +156,15 @@ def build_steps(path: Sequence[Edge], start_heading_deg: float | None = None) ->
     for n, (begin, maneuver, angle) in enumerate(starts):
         end = starts[n + 1][0] if n + 1 < len(starts) else len(path)
         segment = path[begin:end]
-        factors, unknown = _segment_factors(path, begin, end, start_heading_deg)
+        factors, unknown, duration = _segment_factors(path, begin, end, start_heading_deg)
         distance = sum(e.length_m for e in segment)
-        # 합쳐진 구간은 도로명이 같으므로 첫 엣지 이름이 구간 전체의 이름이다
+        # 합쳐진 구간은 도로명이 같으므로(이름 없는 직진 구간만 덧붙음) 첫 엣지 이름이 단계의 이름이다
         road_name = segment[0].name
+        if road_name:
+            text = instruction(maneuver, road_name)
+        else:
+            next_name = path[end].name if end < len(path) else None
+            text = instruction(maneuver, _unnamed_target(segment[0].road_class, next_name))
         steps.append(
             Step(
                 index=n,
@@ -146,12 +172,12 @@ def build_steps(path: Sequence[Edge], start_heading_deg: float | None = None) ->
                 point=segment[0].geometry[0],
                 road_name=road_name,
                 distance_m=distance,
-                duration_s=sum(e.travel_time_s for e in segment),
+                duration_s=duration,
                 turn_angle_deg=round(angle, 1),
                 factor_amounts=factors,
                 offset_m=offset,
                 road_class=segment[0].road_class,
-                instruction=instruction(maneuver, road_name),
+                instruction=text,
                 unknown_factors=unknown,
             )
         )

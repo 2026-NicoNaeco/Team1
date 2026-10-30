@@ -193,7 +193,7 @@ class RouteStepOut(BaseModel):
 
 class RouteOut(BaseModel):
     route_id: str
-    label: str = Field(description="경로 식별 글자 (A, B, C …). rank 순서")
+    label: str = Field(description="경로 식별 글자 (A, B, C …). 소요 시간 순서라 A 가 가장 빠르다")
     rank: int
     via: str = Field(description="경유 도로 요약. 예: '상무대로 · 무진대로'")
     difficulty_score: float
@@ -261,6 +261,17 @@ class WeightChangeOut(BaseModel):
 class ProfileAnalyzeResponse(BaseModel):
     weights: dict[FactorCode, float]
     changes: list[WeightChangeOut]
+
+
+# ---------- service area ----------
+
+class ServiceAreaOut(BaseModel):
+    bbox: tuple[float, float, float, float] = Field(
+        description="minLng, minLat, maxLng, maxLat (/v1/hotspots 의 bbox 와 같은 순서)"
+    )
+    center: LatLng = Field(description="지도 첫 화면·기본 출발지로 쓸 수 있는 도로 위 지점")
+    max_snap_distance_m: float = Field(description="출발·도착 좌표가 도로에서 이보다 멀면 OUT_OF_SERVICE_AREA")
+    source: DataSourceOut
 
 
 # ---------- hotspots ----------

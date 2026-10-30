@@ -95,6 +95,19 @@ class Measurement:
 
 
 @dataclass(frozen=True)
+class ServiceArea:
+    """경로를 찾을 수 있는 지역. 이 밖의 좌표는 OUT_OF_SERVICE_AREA 다."""
+
+    min_lat: float
+    min_lng: float
+    max_lat: float
+    max_lng: float
+    # 지도 첫 화면·기본 출발지로 쓸 수 있는 도로 위 지점 (영역 중앙에서 가장 가까운 노드)
+    center: Point
+    source: DataSource
+
+
+@dataclass(frozen=True)
 class Hotspot:
     code: FactorCode
     point: Point

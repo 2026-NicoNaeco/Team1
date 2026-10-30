@@ -1,6 +1,6 @@
 """프로필 기반 비용 모델.
 
-탐색 비용 = 주행 시간(도로 선호 보정) + 난이도 점수 × POINT_SECONDS
+탐색 비용 = 주행 시간(도로 선호 보정) + 회전 시간 + 난이도 점수 × POINT_SECONDS
 난이도 점수 = Σ 요소 발생량(횟수 또는 km) × 요소 기본 점수 × 사용자 가중치
 
 구간 사이 전환에서 생기는 요소(회전·지역 진입·고속도로 진입/진출)는 transition() 이 한곳에서
@@ -22,6 +22,11 @@ TURN_MIN_ANGLE = 30.0
 SHARP_TURN_MIN_ANGLE = 100.0  # 안내 문구(급좌·우회전) 기준. 점수 요소 SHARP_TURN(급커브)과는 무관
 U_TURN_MIN_ANGLE = 165.0
 
+# 회전할 때 감속·대기로 더 걸리는 시간 (교통 자료가 없어 일반적인 값을 쓴다)
+RIGHT_TURN_DELAY_S = 5.0
+LEFT_TURN_DELAY_S = 10.0
+U_TURN_DELAY_S = 20.0
+
 ROAD_PREFERENCE_FACTORS: dict[RoadPreference, dict[RoadClass, float]] = {
     RoadPreference.HIGHWAY: {
         RoadClass.HIGHWAY: 0.8, RoadClass.RAMP: 0.85, RoadClass.ARTERIAL: 0.9,
@@ -40,6 +45,19 @@ class Transition:
     factors: dict[FactorCode, float]
     # 비보호 여부를 따져야 하는 교차로 좌회전이었는지 (측정값의 정보 유무 판단용)
     left_turn: bool = False
+
+    @property
+    def delay_s(self) -> float:
+        return turn_delay_s(self.factors, left=self.left_turn)
+
+
+def turn_delay_s(factors: Mapping[FactorCode, float], *, left: bool = False) -> float:
+    """회전에 드는 시간. 소요 시간·탐색 비용·안내 단계가 모두 이 값을 쓴다."""
+    if factors.get(FactorCode.U_TURN):
+        return U_TURN_DELAY_S
+    if factors.get(FactorCode.TURN_COUNT):
+        return LEFT_TURN_DELAY_S if left else RIGHT_TURN_DELAY_S
+    return 0.0
 
 
 def classify_turn(
@@ -118,5 +136,9 @@ class CostModel:
         time = edge.travel_time_s * self._road_factors[edge.road_class]
         return time + self.points(edge_amounts(edge)) * POINT_SECONDS
 
-    def turn_cost(self, amounts: Mapping[FactorCode, float]) -> float:
-        return self.points(amounts) * POINT_SECONDS
+    def turn_cost(self, amounts: Mapping[FactorCode, float], *, left: bool = False) -> float:
+        """구간 전환의 비용: 회전 시간 + 난이도 점수."""
+        return turn_delay_s(amounts, left=left) + self.points(amounts) * POINT_SECONDS
+
+    def transition_cost(self, t: Transition) -> float:
+        return self.turn_cost(t.factors, left=t.left_turn)
