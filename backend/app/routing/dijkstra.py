@@ -1,7 +1,8 @@
-"""임시 경로 탐색 구현 — 엣지 기반 가중치 다익스트라.
+"""임시 경로 탐색 구현 — 엣지 기반 가중치 다익스트라 (A* 하한으로 가속).
 
 회전 비용(방향 전환·유턴·비보호 좌회전)은 구간 사이 전환에서 생기므로 상태를 노드가 아닌
-엣지로 둔다.
+엣지로 둔다. 남은 비용의 하한(랜드마크 주행 시간, landmarks.py)을 더해 도착지 쪽부터 펼치므로(A*)
+서울 전체 같은 넓은 도로망에서도 덜 둘러보지만, 하한이 실제 비용을 넘지 않아 찾는 경로는 다익스트라와 같다.
 
 후보는 FE 데모(mobile/src/mock/mockRouteProvider.ts)처럼 관점을 바꿔 가며 찾는다.
 사용자 선호 → 가장 빠른 길 → 고속도로 위주 순서이고, 그래도 모자라면 이미 찾은 경로의
@@ -17,7 +18,7 @@ import hashlib
 import heapq
 import itertools
 from collections import Counter, defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from app.domain.factors import FACTORS, FactorCode, FactorKind
@@ -33,6 +34,7 @@ from app.routing.cost import (
 from app.routing.errors import NoRouteFound, OutOfServiceArea, SameLocation
 from app.routing.geo import haversine_m, midpoint
 from app.routing.graph import Edge, RoadGraph
+from app.routing.landmarks import Landmarks
 from app.routing.measure import measure_route
 from app.routing.snap import Anchor, arrival_pieces, base_edge_id, departure_pieces, direct_pieces, snap
 from app.routing.steps import build_steps
@@ -73,6 +75,10 @@ class DijkstraRouteFinder:
     def __init__(self, graph: RoadGraph, max_snap_distance_m: float = 1000.0):
         self.graph = graph
         self.max_snap_distance_m = max_snap_distance_m
+        # 남은 주행 시간의 하한. 도로망이 바뀌지 않으므로 처음에 한 번 구해 둔다
+        self._landmarks = Landmarks(graph)
+        # 도로망 구간 → 이어지는 다음 구간과 전환. 사용자 선호와 무관해서 탐색이 처음 지날 때 한 번만 만든다
+        self._move_cache: dict[str, tuple[_Move, ...]] = {}
 
     def find_route(
         self,
@@ -180,11 +186,14 @@ class DijkstraRouteFinder:
             starts = [*self.graph.out_edges.get(start.node, []), *by_source.get(start.node, [])]
         else:
             starts = [*departure_pieces(start), *direct]
+        # 도착하려면 지나야 하는 노드: 도착 교차로, 또는 도착 조각이 시작하는 노드
+        entries = [end.node] if end.node is not None else list(by_source)
         return _Terminals(
             starts=tuple(starts),
             end_node=end.node,
             arrivals={node: tuple(pieces) for node, pieces in by_source.items()},
             end_ids=frozenset(p.id for p in [*arrivals, *direct]),
+            remaining_s=self._landmarks.bound(entries, start.node or (starts[0].target if starts else None)),
         )
 
     def _search(
@@ -194,7 +203,6 @@ class DijkstraRouteFinder:
         penalties: Mapping[str, float],
         heading: float | None,
     ) -> list[Edge] | None:
-        graph = self.graph
         tie = itertools.count()
         dist: dict[str, float] = {}
         prev: dict[str, str | None] = {}
@@ -204,36 +212,68 @@ class DijkstraRouteFinder:
         def edge_cost(edge: Edge) -> float:
             return cost_model.edge_cost(edge) * penalties.get(base_edge_id(edge.id), 1.0)
 
+        # A*: 남은 비용의 하한 = 구간 끝 노드에서 도착까지의 주행 시간 하한 × 가장 싼 도로 배율.
+        # 회전·난이도 비용은 0 이상이고 벌점 배수는 1 이상이라 실제 비용이 이보다 작을 수 없으므로 다익스트라와 같은 경로를 찾는다.
+        # 도착 조각은 원래 구간의 끝 노드를 그대로 갖고 있어 노드로 재면 안 되고, 이미 도착이라 0 이다
+        factor = cost_model.min_road_factor
+        by_node: dict[str, float] = {}
+
+        def remaining(edge: Edge) -> float:
+            if edge.id in terminals.end_ids:
+                return 0.0
+            h = by_node.get(edge.target)
+            if h is None:
+                h = by_node[edge.target] = terminals.remaining_s(edge.target) * factor
+            return h
+
+        def push(edge: Edge, cost: float, before: str | None) -> None:
+            if cost < dist.get(edge.id, float("inf")):
+                dist[edge.id] = cost
+                prev[edge.id] = before
+                seen[edge.id] = edge
+                heapq.heappush(heap, (cost + remaining(edge), next(tie), edge.id))
+
         for edge in terminals.starts:
             cost = edge_cost(edge) + cost_model.turn_cost(transition_factors(None, edge))
             if heading is not None:
                 cost += cost_model.turn_cost(heading_factors(heading, edge))
-            if cost < dist.get(edge.id, float("inf")):
-                dist[edge.id] = cost
-                prev[edge.id] = None
-                seen[edge.id] = edge
-                heapq.heappush(heap, (cost, next(tie), edge.id))
+            push(edge, cost, None)
 
         done: set[str] = set()
         while heap:
-            cost, _, edge_id = heapq.heappop(heap)
+            _, _, edge_id = heapq.heappop(heap)
             if edge_id in done:
                 continue
             done.add(edge_id)
+            cost = dist[edge_id]
             edge = seen[edge_id]
             if terminals.reached(edge):
                 return self._unwind(edge_id, prev, seen)
-            base = base_edge_id(edge_id)
-            for nxt in (*graph.out_edges.get(edge.target, ()), *terminals.arrivals.get(edge.target, ())):
-                if nxt.id in done or (base, base_edge_id(nxt.id)) in graph.banned_turns:
-                    continue
-                new_cost = cost + cost_model.transition_cost(transition(edge, nxt)) + edge_cost(nxt)
-                if new_cost < dist.get(nxt.id, float("inf")):
-                    dist[nxt.id] = new_cost
-                    prev[nxt.id] = edge_id
-                    seen[nxt.id] = nxt
-                    heapq.heappush(heap, (new_cost, next(tie), nxt.id))
+            # 도착 조각은 요청마다 달라서 저장해 둔 전환에 없다
+            arrivals = terminals.arrivals.get(edge.target, ())
+            for nxt, factors, left in (*self._moves(edge), *self._make_moves(edge, arrivals)):
+                if nxt.id not in done:
+                    push(nxt, cost + cost_model.move_cost(factors, left) + edge_cost(nxt), edge_id)
         return None
+
+    def _moves(self, edge: Edge) -> tuple["_Move", ...]:
+        """구간 끝에서 이어지는 도로망 구간과 그 전환. 조각 엣지는 요청마다 달라서 저장하지 않는다."""
+        moves = self._move_cache.get(edge.id)
+        if moves is None:
+            moves = self._make_moves(edge, self.graph.out_edges.get(edge.target, ()))
+            if self.graph.edges.get(edge.id) is edge:
+                self._move_cache[edge.id] = moves
+        return moves
+
+    def _make_moves(self, edge: Edge, candidates: Sequence[Edge]) -> tuple["_Move", ...]:
+        base = base_edge_id(edge.id)
+        moves = []
+        for nxt in candidates:
+            if (base, base_edge_id(nxt.id)) in self.graph.banned_turns:
+                continue
+            t = transition(edge, nxt)
+            moves.append((nxt, tuple(t.factors.items()), t.left_turn))
+        return tuple(moves)
 
     @staticmethod
     def _unwind(last: str, prev: Mapping[str, str | None], seen: Mapping[str, Edge]) -> list[Edge]:
@@ -295,6 +335,10 @@ class DijkstraRouteFinder:
         )
 
 
+# (다음 구간, 전환 요소 항목, 교차로 좌회전 여부)
+_Move = tuple[Edge, tuple[tuple[FactorCode, float], ...], bool]
+
+
 @dataclass(frozen=True)
 class _Terminals:
     """한 번의 탐색에서 쓰는 출발 엣지 후보와 도착 조건."""
@@ -305,6 +349,8 @@ class _Terminals:
     # 노드 → 그 노드에서 도착 지점으로 들어가는 조각
     arrivals: Mapping[str, tuple[Edge, ...]]
     end_ids: frozenset[str]
+    # 노드 → 도착까지 남은 주행 시간(초)의 하한
+    remaining_s: Callable[[str], float]
 
     def reached(self, edge: Edge) -> bool:
         return edge.id in self.end_ids or (self.end_node is not None and edge.target == self.end_node)

@@ -128,17 +128,29 @@ class CostModel:
     def __init__(self, profile: Profile):
         self._weights = {code: profile.weight(code) for code in FactorCode}
         self._road_factors = ROAD_PREFERENCE_FACTORS[profile.road_preference]
+        # 주행 시간에 곱하는 가장 작은 배율. 탐색이 남은 비용의 하한을 잡을 때 쓴다
+        self.min_road_factor = min(self._road_factors.values())
+        # 탐색 중 같은 구간·같은 전환 요소 조합을 여러 번 매기므로 계산한 값을 둔다
+        self._edge_costs: dict[str, float] = {}
+        self._move_costs: dict[tuple[tuple[tuple[FactorCode, float], ...], bool], float] = {}
 
     def points(self, amounts: Mapping[FactorCode, float]) -> float:
         return sum(n * FACTORS[code].base_penalty * self._weights[code] for code, n in amounts.items())
 
     def edge_cost(self, edge: Edge) -> float:
-        time = edge.travel_time_s * self._road_factors[edge.road_class]
-        return time + self.points(edge_amounts(edge)) * POINT_SECONDS
+        cost = self._edge_costs.get(edge.id)
+        if cost is None:
+            time = edge.travel_time_s * self._road_factors[edge.road_class]
+            cost = self._edge_costs[edge.id] = time + self.points(edge_amounts(edge)) * POINT_SECONDS
+        return cost
+
+    def move_cost(self, factors: tuple[tuple[FactorCode, float], ...], left: bool) -> float:
+        """transition() 결과(요소 항목·좌회전 여부)의 비용. 조합이 몇 가지뿐이라 한 번씩만 계산한다."""
+        cost = self._move_costs.get((factors, left))
+        if cost is None:
+            cost = self._move_costs[(factors, left)] = self.turn_cost(dict(factors), left=left)
+        return cost
 
     def turn_cost(self, amounts: Mapping[FactorCode, float], *, left: bool = False) -> float:
         """구간 전환의 비용: 회전 시간 + 난이도 점수."""
         return turn_delay_s(amounts, left=left) + self.points(amounts) * POINT_SECONDS
-
-    def transition_cost(self, t: Transition) -> float:
-        return self.turn_cost(t.factors, left=t.left_turn)

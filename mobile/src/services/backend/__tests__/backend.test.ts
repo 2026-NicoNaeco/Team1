@@ -2,7 +2,7 @@ import { FACTOR_ORDER } from '../../../domain/factors';
 import { emptyLearned } from '../../../domain/learning';
 import { createDefaultProfile, resolvePreferences } from '../../../domain/preferences';
 import { recommend } from '../../../domain/recommend';
-import type { DriverProfile } from '../../../domain/types';
+import type { DriverProfile, Place } from '../../../domain/types';
 import { RouteProviderError } from '../../types';
 import { BackendPlaceSearchProvider } from '../BackendPlaceSearchProvider';
 import { BackendRouteProvider } from '../BackendRouteProvider';
@@ -161,6 +161,16 @@ describe('BackendPlaceSearchProvider', () => {
     expect(provider.isServiceable({ ...SAMPLE_ORIGIN, location: { lat: 0.02, lng: 0.05 } })).toBe(false);
     expect(provider.isServiceable({ ...SAMPLE_ORIGIN, location: { lat: 35.1768, lng: 126.9058 } })).toBe(false);
     expect(provider.isServiceable(SAMPLE_ORIGIN)).toBe(true);
+  });
+
+  it('서울 범위 사각형 안이라도 경기도 장소는 거른다 (도로망은 서울시 경계 안만 담는다)', () => {
+    const provider = new BackendPlaceSearchProvider('http://api.test');
+    const gwacheon: Place = { id: 'kakao:2', name: '과천시청', address: '경기 과천시 관문로 69', category: 'station', location: { lat: 37.4292, lng: 126.9876 } };
+    const bucheon: Place = { id: 'kakao:3', name: '부천역', address: '경기 부천시 부천로 1', category: 'station', location: { lat: 37.484, lng: 126.783 } };
+    const jamsil: Place = { id: 'kakao:4', name: '잠실역', address: '서울 송파구 올림픽로 265', category: 'station', location: { lat: 37.5133, lng: 127.1001 } };
+    expect(provider.isServiceable(gwacheon)).toBe(false);
+    expect(provider.isServiceable(bucheon)).toBe(false);
+    expect(provider.isServiceable(jamsil)).toBe(true);
   });
 
   it('시연용 지점은 모두 도로망 범위 안에 있다', () => {

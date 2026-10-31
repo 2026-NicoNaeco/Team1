@@ -32,11 +32,12 @@ npm run typecheck    # tsc --noEmit
 - **백엔드 모드**: `mobile/.env.local`(커밋되지 않음)에 아래를 넣고 개발 서버를 캐시를 비워 다시 시작합니다(`npx expo start -c`).
   ```
   EXPO_PUBLIC_DATA_SOURCE=backend
-  EXPO_PUBLIC_API_BASE_URL=http://localhost:8000
+  EXPO_PUBLIC_API_BASE_URL=http://localhost:8000   # 선택. 없으면 Expo 개발 서버가 떠 있는 PC 의 8000 포트
   EXPO_PUBLIC_KAKAO_JS_KEY=<카카오 JavaScript 키>   # 선택. 있으면 실제 지도(카카오맵)를 씁니다
   ```
-  백엔드는 `backend/.env` 에 `GRAPH_PATH=data/gangnam.json`(강남역·역삼역 일대 실제 도로망)을 넣고 `cd backend && uvicorn app.main:app --port 8000` 으로 띄웁니다. `GRAPH_PATH` 가 없으면 백엔드가 광주 가상 격자를 써서 앱의 시연 지점으로는 경로를 찾지 못합니다(서비스 지역 아님). Android 에뮬레이터는 `adb reverse tcp:8000 tcp:8000` 후 `localhost` 로 붙습니다(또는 `http://10.0.2.2:8000`).
-  이 모드에서는 출발지가 강남역이고, 목적지는 도로망 안의 역 4곳(선릉·역삼·신논현·언주, 좌표는 역 부근의 대략적인 지점)입니다(`services/backend/samplePlaces.ts`). 지도는 카카오 키가 있으면 카카오맵, 없으면 경로 모양만 그리는 임시 지도입니다(5장). REST·Admin 키 같은 비밀 값은 이 파일에 넣지 않습니다(번들에 그대로 들어갑니다). 카카오 JavaScript 키는 등록한 도메인에서만 동작하는 공개용 키라 예외입니다.
+  백엔드는 `backend/.env` 에 `GRAPH_PATH=data/seoul.json`(서울 전체 실제 도로망, 만드는 법은 backend/README.md)을 넣고 `cd backend && uvicorn app.main:app --port 8000` 으로 띄웁니다. `GRAPH_PATH` 가 없으면 백엔드가 광주 가상 격자를 써서 앱의 시연 지점으로는 경로를 찾지 못합니다(서비스 지역 아님). Android 에뮬레이터는 `adb reverse tcp:8000 tcp:8000` 후 `localhost` 로 붙습니다(또는 `http://10.0.2.2:8000`).
+  실기기 Expo Go 는 앱을 받아 온 PC 주소로 백엔드에 붙으므로 와이파이·핫스팟을 바꿔도 `EXPO_PUBLIC_API_BASE_URL` 을 고칠 필요가 없습니다(백엔드는 `--host 0.0.0.0` 으로 띄웁니다).
+  이 모드에서는 출발지가 강남역이고, 목적지는 카카오 검색으로 서울 안 어디든 고를 수 있습니다. 추천 지점은 강남 일대 역 4곳과 잠실·여의도·서울역·홍대입구입니다(`services/backend/samplePlaces.ts`, 좌표는 역 부근의 대략적인 지점). 지도는 카카오 키가 있으면 카카오맵, 없으면 경로 모양만 그리는 임시 지도입니다(5장). REST·Admin 키 같은 비밀 값은 이 파일에 넣지 않습니다(번들에 그대로 들어갑니다). 카카오 JavaScript 키는 등록한 도메인에서만 동작하는 공개용 키라 예외입니다.
   카카오맵을 쓰려면 카카오디벨로퍼스에서 앱의 **카카오맵을 활성화**하고, JavaScript 키의 **JavaScript SDK 도메인**에 `http://localhost` 를 등록합니다(WebView 가 지도 페이지를 이 주소로 띄웁니다). 무료 쿼터는 개발자 계정에서 처음 활성화한 앱에만 있습니다.
 - 휴대폰의 Expo Go 가 SDK 57 을 지원하지 않으면 개발 빌드(`npx expo run:android` / `npx expo run:ios`)가 필요합니다.
 - 처음 켜면 온보딩이 나옵니다. 처음 상태로 돌아가려면 **설정 → 모든 사용자 데이터 삭제** 를 쓰세요.

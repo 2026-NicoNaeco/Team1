@@ -143,7 +143,7 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
   const trimmed = query.trim();
   const note = (
     <Text variant="caption" color={colors.textTertiary} align="center" style={styles.note}>
-      시연용이라 일부 장소만 검색돼요
+      시연용이라 서울 안에서만 길을 안내해요
     </Text>
   );
 

@@ -2,7 +2,7 @@ import type { Place } from '../../domain/types';
 import type { PlaceSearchProvider, RequestOptions } from '../types';
 import { BackendError, requestJson } from './http';
 import { toPlace, type ApiPlace } from './mappers';
-import { SAMPLE_ORIGIN, SAMPLE_PLACES, SERVICE_BBOX } from './samplePlaces';
+import { SAMPLE_ORIGIN, SAMPLE_PLACES, SERVICE_BBOX, SERVICE_REGION_PREFIX } from './samplePlaces';
 
 /**
  * 백엔드 장소 검색 (GET /v1/places/search, 카카오 로컬 프록시).
@@ -23,10 +23,11 @@ export class BackendPlaceSearchProvider implements PlaceSearchProvider {
     return SAMPLE_PLACES;
   }
 
-  /** 도로망 범위 밖(데모 도시의 최근 목적지, 예전 광주 샘플 지점, 범위 밖 검색 결과)은 경로를 찾을 수 없다 */
+  /** 도로망 범위 밖(데모 도시의 최근 목적지, 예전 광주 샘플 지점, 서울 밖 검색 결과)은 경로를 찾을 수 없다 */
   isServiceable(place: Place): boolean {
     const { lat, lng } = place.location;
-    return lat >= SERVICE_BBOX.minLat && lat <= SERVICE_BBOX.maxLat && lng >= SERVICE_BBOX.minLng && lng <= SERVICE_BBOX.maxLng;
+    const inBox = lat >= SERVICE_BBOX.minLat && lat <= SERVICE_BBOX.maxLat && lng >= SERVICE_BBOX.minLng && lng <= SERVICE_BBOX.maxLng;
+    return inBox && place.address.startsWith(SERVICE_REGION_PREFIX);
   }
 
   async search(query: string, options?: RequestOptions): Promise<Place[]> {

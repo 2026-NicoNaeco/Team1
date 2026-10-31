@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 import pytest
@@ -170,6 +171,53 @@ def test_narrow_key_overrides_lane_rule():
     edge = graph.edges["AB"]
     assert FactorCode.NARROW_ROAD in edge.known
     assert not edge.has(FactorCode.NARROW_ROAD)
+
+
+def _road(legs: list[tuple[float, float]], *tags: tuple[str, str], closed: bool = False) -> str:
+    """(길이 m, 방위각) 구간을 이어 그린 도로 하나. 중간 점은 모두 형상점이다. closed 면 마지막에 첫 점으로 돌아온다."""
+    lat, lng = 37.5, 127.0
+    nodes = [(lat, lng)]
+    for length, bearing in legs:
+        lat += length * math.cos(math.radians(bearing)) / 111_000
+        lng += length * math.sin(math.radians(bearing)) / (111_000 * math.cos(math.radians(lat)))
+        nodes.append((lat, lng))
+    node_xml = "".join(f'<node id="n{i}" lat="{a:.7f}" lon="{b:.7f}"/>' for i, (a, b) in enumerate(nodes))
+    refs = "".join(f'<nd ref="n{i}"/>' for i in [*range(len(nodes)), *([0] if closed else [])])
+    tag_xml = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in [("highway", "residential"), *tags])
+    return f'<osm version="0.6">{node_xml}<way id="1">{refs}{tag_xml}</way></osm>'
+
+
+@pytest.mark.parametrize(
+    ("legs", "expected"),
+    [
+        ([(100, 90), (100, 0)], 1),  # 형상점 한 곳에서 90° 꺾임
+        ([(50, 90), (10, 60), (10, 30), (50, 0)], 1),  # 30° 씩 세 번, 20m 안에 합쳐 90°
+        ([(100, 90), (100, 50), (100, 10)], 0),  # 40° 씩 두 번이지만 100m 떨어져 완만한 곡선
+        ([(100, 90), (100, 90)], 0),  # 직선
+    ],
+)
+def test_sharp_curves_from_geometry(legs, expected):
+    edges = _edges(convert(_road(legs))[0])
+    # 양방향 모두 같은 수이고, 형상에서 판정하므로 0 이어도 키를 쓴다 (정보 없음이 아니라 확인한 결과 없음)
+    assert edges["w1_0"]["sharp_curves"] == edges["w1_0_r"]["sharp_curves"] == expected
+
+
+def test_roundabout_curves_count_as_roundabout_only():
+    # 한 변 20m 정사각형 회전교차로: 꼭짓점마다 90° 지만 급커브로 세지 않는다
+    osm = _road([(20, 90), (20, 0), (20, 270)], ("junction", "roundabout"), closed=True)
+    edge = _edges(convert(osm)[0])["w1_0"]
+    assert edge["roundabout"] is True
+    assert edge["sharp_curves"] == 0
+
+
+def test_sharp_curve_measurement_is_known():
+    graph = RoadGraph.from_dict(convert(_road([(100, 90), (100, 0)]))[0])
+    start, end = graph.nodes["n0"].point, graph.nodes["n2"].point
+    [route] = DijkstraRouteFinder(graph).find_route(start, end, Profile())
+    sharp = route.measurements[FactorCode.SHARP_TURN]
+    assert sharp.availability is Availability.KNOWN
+    assert sharp.value == 1
+    assert any(h.code is FactorCode.SHARP_TURN for h in route.hotspots)
 
 
 GANGNAM = Path(__file__).resolve().parents[1] / "data" / "gangnam.json"

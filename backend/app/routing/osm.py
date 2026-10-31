@@ -10,7 +10,8 @@
 - 좁은 도로: FE 정의(마주 오는 차와 지나가기 빠듯한 길)대로 narrow 를 직접 판정한다.
   폭 태그, 골목(service=alley), 양방향 1차로, 간선·보조간선 등급으로 판정하고 그 밖의 이면도로는 정보 없음
 - 회전교차로: 도로 모양 자체라 빠지는 일이 드물어 모든 구간에 쓴다
-- 보호구역·사고다발·교통량·비보호 좌회전·차로 변경·급커브: OSM 에 없다. 공공데이터로 따로 붙여야 한다
+- 급커브: 태그가 아니라 도로 형상에서 판정하므로 모든 구간에 쓴다. 회전교차로 구간은 회전교차로로만 센다
+- 보호구역·사고다발·교통량·비보호 좌회전·차로 변경: OSM 에 없다. 공공데이터로 따로 붙여야 한다
 
 OSM 의 회전 금지(type=restriction, 경유지가 노드인 것)는 turn_restrictions 로 옮긴다.
 """
@@ -51,6 +52,10 @@ WIDE_HIGHWAYS = {"motorway", "trunk", "primary", "secondary"}
 ROUNDABOUT_JUNCTIONS = {"roundabout", "circular"}
 # 한 구간 안에서 이 거리 안의 신호는 같은 신호로 본다 (교차로 신호와 바로 앞 횡단보도 신호)
 SIGNAL_MERGE_M = 30.0
+# 교차로가 아닌 곳에서 도로가 이 거리 안에 이 각도 이상 꺾이면 급커브 한 곳으로 센다 (FE 데모 SHARP_CURVE_MIN_ANGLE 과 같은 각도).
+# 형상점 여러 개로 그린 굽은 길도 잡도록 거리 안의 회전각을 더한다. 40m 안에 60° 면 곡선 반지름 약 38m 이하다
+SHARP_CURVE_MIN_DEG = 60.0
+SHARP_CURVE_WINDOW_M = 40.0
 MIN_EDGE_M = 0.5
 # 회전 금지 종류 → 그 회전의 대표 각도 (양수가 우회전)
 RESTRICTION_ANGLES = {"left_turn": -90.0, "right_turn": 90.0, "straight_on": 0.0, "u_turn": 180.0}
@@ -87,6 +92,7 @@ class ConversionStats:
     restrictions_skipped: int = 0
     signal_edges: int = 0
     narrow_known_edges: int = 0
+    sharp_curves: int = 0
     highway: Counter[str] = field(default_factory=Counter)
 
 
@@ -149,6 +155,7 @@ def convert(xml: str | bytes, name: str = DEFAULT_NAME) -> tuple[dict[str, Any],
     stats.restrictions = len(banned)
     stats.signal_edges = sum("traffic_lights" in e.attrs for e in kept_edges)
     stats.narrow_known_edges = sum("narrow" in e.attrs for e in kept_edges)
+    stats.sharp_curves = sum(e.attrs["sharp_curves"] for e in kept_edges)
 
     node_ids = sorted({n for e in kept_edges for n in (e.source, e.target)})
     data = {
@@ -253,11 +260,14 @@ def _make_edge(
 ) -> _Edge:
     road_class, _ = ROAD_TYPES[tags["highway"]]
     geometry = [points[n] for n in nodes]
+    roundabout = tags.get("junction") in ROUNDABOUT_JUNCTIONS
     attrs: dict[str, Any] = {
         "oneway": True,  # 방향마다 신호 수가 달라서 역방향도 따로 쓴다
         "speed_kph": _speed_kph(tags),
         "road_class": road_class.value,
-        "roundabout": tags.get("junction") in ROUNDABOUT_JUNCTIONS,
+        "roundabout": roundabout,
+        # 회전교차로는 원래 계속 꺾이는 길이라 회전교차로 요소로만 센다
+        "sharp_curves": 0 if roundabout else _sharp_curves(geometry),
     }
     if tags.get("name"):
         attrs["name"] = tags["name"]
@@ -283,6 +293,37 @@ def _signal_count(nodes: list[str], geometry: list[Point], signals: set[str]) ->
             if last_at is None or offset - last_at > SIGNAL_MERGE_M:
                 count += 1
             last_at = offset
+    return count
+
+
+def _sharp_curves(geometry: list[Point]) -> int:
+    """구간 안에서 도로가 급하게 꺾이는 곳의 수. 교차로 회전은 구간 사이 전환이라 여기서 세지 않는다."""
+    segments = [(bearing_deg(a, b), haversine_m(a, b)) for a, b in zip(geometry, geometry[1:])]
+    segments = [s for s in segments if s[1] >= MIN_EDGE_M]
+    # 형상점마다 (구간 시작부터의 거리, 꺾인 각도)
+    bends: list[tuple[float, float]] = []
+    offset = 0.0
+    for (before, length), (after, _) in zip(segments, segments[1:]):
+        offset += length
+        bends.append((offset, signed_turn_deg(before, after)))
+
+    count = 0
+    i = 0
+    while i < len(bends):
+        start, total = bends[i][0], 0.0
+        end = None
+        for j in range(i, len(bends)):
+            if bends[j][0] - start > SHARP_CURVE_WINDOW_M:
+                break
+            total += bends[j][1]
+            if abs(total) >= SHARP_CURVE_MIN_DEG:
+                end = j
+                break
+        if end is None:
+            i += 1
+        else:
+            count += 1
+            i = end + 1  # 같은 굴곡을 두 번 세지 않는다
     return count
 
 
@@ -424,6 +465,7 @@ def main(argv: list[str] | None = None) -> None:
         f"(범위 밖 도로라 못 옮긴 규칙 {stats.restrictions_outside}개, 해당 없는 규칙 {stats.restrictions_skipped}개)"
     )
     print(f"신호 정보가 있는 구간 {stats.signal_edges}개, 좁은 도로 판정이 있는 구간 {stats.narrow_known_edges}개")
+    print(f"급커브 {stats.sharp_curves}곳 (방향 구간마다 따로 셈)")
 
 
 if __name__ == "__main__":
