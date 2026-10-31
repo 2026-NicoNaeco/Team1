@@ -7,6 +7,7 @@ import { previewLearning } from '../domain/learning';
 import { createSimulationRecord } from '../domain/records';
 import type { FactorCode, Feedback, FeedbackRating } from '../domain/types';
 import { colors, layout, radius, space } from '../design/tokens';
+import { useTooNarrowFor } from '../hooks/useFontScale';
 import type { RootScreenProps } from '../navigation/types';
 import { useAppStore } from '../state/appStore';
 import { clock } from '../state/clock';
@@ -50,6 +51,7 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
   const addRecord = useAppStore((s) => s.addRecord);
   const applyFeedback = useAppStore((s) => s.applyFeedback);
   const showToast = useUiStore((s) => s.showToast);
+  const restartStacked = useTooNarrowFor(320);
 
   const [rating, setRating] = useState<FeedbackRating | null>(null);
   const [factors, setFactors] = useState<FactorCode[]>([]);
@@ -297,9 +299,9 @@ export function ArrivalScreen({ navigation }: RootScreenProps<'Arrival'>) {
           onPress={() => void finish()}
         />
         {!arrived ? (
-          <View style={styles.restartRow}>
-            <Button title="이어서 시작" variant="neutral" size="medium" style={styles.flex} onPress={() => restart(run.progressM)} testID="arrival-resume" />
-            <Button title="처음부터 다시" variant="neutral" size="medium" style={styles.flex} onPress={() => restart(0)} testID="arrival-restart" />
+          <View style={restartStacked ? styles.restartColumn : styles.restartRow}>
+            <Button title="이어서 시작" variant="neutral" size="medium" style={restartStacked ? null : styles.flex} onPress={() => restart(run.progressM)} testID="arrival-resume" />
+            <Button title="처음부터 다시" variant="neutral" size="medium" style={restartStacked ? null : styles.flex} onPress={() => restart(0)} testID="arrival-restart" />
           </View>
         ) : null}
       </ActionBar>
@@ -332,4 +334,5 @@ const styles = StyleSheet.create({
   face: { width: 52, height: 52, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   restartRow: { flexDirection: 'row', gap: space.sm },
+  restartColumn: { gap: space.sm },
 });

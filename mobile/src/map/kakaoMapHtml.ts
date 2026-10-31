@@ -3,7 +3,7 @@ import { colors, mapColors } from '../design/tokens';
 /**
  * WebView 안에서 도는 카카오 지도 페이지.
  * RN → 페이지: window.__applyScene(scene) (kakaoScene.ts 의 KakaoScene)
- * 페이지 → RN: { type: 'ready' } / { type: 'error', message } / { type: 'routePress', id }
+ * 페이지 → RN: { type: 'sdkLoaded' } / { type: 'ready' } / { type: 'tilesLoaded' } / { type: 'error', message } / { type: 'routePress', id }
  * 카카오는 JavaScript 키를 쓰는 페이지의 도메인을 검사하므로, WebView 는 이 HTML 을 baseUrl(KAKAO_PAGE_ORIGIN)로 띄우고
  * 카카오디벨로퍼스의 'JavaScript SDK 도메인'에 같은 주소를 등록해 둔다.
  */
@@ -32,7 +32,7 @@ var routeLayers = {};
 var markerLayers = {};
 var lastBoundsSig = null;
 var lastScene = null;
-var FIT_PADDING = 40;
+var FIT_PADDING = 28;
 var CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="' + THEME.onPrimary + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
 
 function post(msg) {
@@ -42,10 +42,29 @@ window.onerror = function (message) { post({ type: 'error', message: String(mess
 
 function ll(p) { return new kakao.maps.LatLng(p[0], p[1]); }
 
+// 캐시가 빈 첫 로드에서는 tilesloaded 가 오지 않을 때가 있어 타일 이미지도 직접 확인한다
+function watchFirstTiles() {
+  var settled = 0;
+  var timer = setInterval(function () {
+    var imgs = document.querySelectorAll('#map img');
+    var done = imgs.length > 0;
+    for (var i = 0; i < imgs.length; i++) if (!imgs[i].complete) done = false;
+    settled = done ? settled + 1 : 0;
+    if (settled < 2) return;
+    clearInterval(timer);
+    post({ type: 'tilesLoaded' });
+  }, 150);
+}
+
 function init() {
   if (!window.kakao || !kakao.maps) { post({ type: 'error', message: 'kakao sdk missing' }); return; }
+  post({ type: 'sdkLoaded' });
   kakao.maps.load(function () {
     map = new kakao.maps.Map(document.getElementById('map'), { center: new kakao.maps.LatLng(35.1595, 126.8526), level: 5 });
+    // 첫 장면을 받기 전의 타일은 초기 위치의 것이라 알리지 않는다
+    kakao.maps.event.addListener(map, 'tilesloaded', function () {
+      if (lastScene) post({ type: 'tilesLoaded' });
+    });
     window.addEventListener('resize', function () {
       map.relayout();
       lastBoundsSig = null;
@@ -197,12 +216,14 @@ function applyCamera(scene) {
 
 window.__applyScene = function (scene) {
   if (!map) return;
+  var firstScene = !lastScene;
   lastScene = scene;
   map.setDraggable(scene.interactive);
   map.setZoomable(scene.interactive);
   applyRoutes(scene.routes);
   applyMarkers(scene.markers);
   applyCamera(scene);
+  if (firstScene) watchFirstTiles();
 };
 `;
 

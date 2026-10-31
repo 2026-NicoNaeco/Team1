@@ -107,6 +107,10 @@ export const space = {
 export const layout = {
   /** 화면 좌우 여백 */
   screenX: 20,
+  /** 뒤로 가기 같은 아이콘 버튼이 있는 줄의 좌우 여백 (버튼 안쪽 여백만큼 덜 들인다) */
+  headerX: 12,
+  /** 버튼 글자의 좌우 여백 */
+  buttonX: 20,
   /** 최소 터치 영역 */
   minTouch: 48,
   buttonHeight: 56,

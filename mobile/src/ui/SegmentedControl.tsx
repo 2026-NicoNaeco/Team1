@@ -58,10 +58,10 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
 }
 
 const styles = StyleSheet.create({
-  track: { flexDirection: 'row', backgroundColor: colors.surfaceStrong, borderRadius: radius.field, padding: 4, gap: 2 },
+  track: { flexDirection: 'row', backgroundColor: colors.surfaceStrong, borderRadius: radius.field, padding: space.xs, gap: space.xs },
   trackStacked: { flexDirection: 'column' },
   segmentOuter: { flex: 1 },
-  segment: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: space.xs, borderRadius: radius.control + 2 },
+  segment: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: space.xs, borderRadius: radius.control },
   segmentStacked: { minHeight: layout.minTouch, paddingHorizontal: space.md, paddingVertical: space.sm },
   segmentOn: { backgroundColor: colors.surface },
 });

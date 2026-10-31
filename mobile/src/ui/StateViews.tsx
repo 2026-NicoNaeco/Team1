@@ -68,6 +68,28 @@ export function LoadingView({ message, style }: { message: string; style?: Style
   );
 }
 
+/** 목표 지점(0~1)까지 감속하며 채우는 로딩 막대. 모션 줄이기를 켜면 바로 그 지점으로 옮긴다. */
+export function LoadingBar({ message, progress, durationMs, style }: { message: string; progress: number; durationMs: number; style?: StyleProp<ViewStyle> }) {
+  const reducedMotion = useReducedMotion();
+  const value = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.timing(value, { toValue: progress, duration: reducedMotion ? 0 : durationMs, easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    animation.start();
+    return () => animation.stop();
+  }, [value, progress, durationMs, reducedMotion]);
+  const width = value.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  return (
+    <View style={[styles.bar, style]} accessibilityRole="progressbar" accessibilityLabel={message}>
+      <Text variant="caption" color={colors.textSecondary} align="center">
+        {message}
+      </Text>
+      <View style={styles.barTrack}>
+        <Animated.View style={[styles.barFill, { width }]} />
+      </View>
+    </View>
+  );
+}
+
 /** 자리를 잡아 주는 스켈레톤. 천천히 깜빡이며, 모션 줄이기를 켜면 멈춘다. */
 export function SkeletonBlock({ height, style }: { height: number; style?: StyleProp<ViewStyle> }) {
   const reducedMotion = useReducedMotion();
@@ -100,5 +122,8 @@ const styles = StyleSheet.create({
   texts: { gap: space.sm, alignItems: 'center' },
   actions: { alignSelf: 'stretch', gap: space.sm },
   loading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, paddingVertical: space.md },
+  bar: { gap: space.sm },
+  barTrack: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceStrong, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
   skeleton: { backgroundColor: colors.surfaceStrong, borderRadius: radius.card },
 });

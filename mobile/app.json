@@ -10,6 +10,7 @@
       "supportsTablet": false
     },
     "android": {
+      "package": "com.newbiemap.app",
       "adaptiveIcon": {
         "backgroundColor": "#0A8576",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -23,6 +24,7 @@
     },
     "description": "운전 초보자를 위한 경로 추천 내비게이션",
     "plugins": [
+      "./plugins/withCleartextTraffic",
       [
         "expo-splash-screen",
         {

@@ -42,10 +42,10 @@ const styles = StyleSheet.create({
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.xs + 2,
+    gap: space.xs,
     paddingHorizontal: space.md,
-    paddingVertical: space.xs + 3,
-    borderRadius: radius.round,
+    paddingVertical: space.sm,
+    borderRadius: radius.field,
     borderWidth: 1,
     alignSelf: 'flex-start',
     maxWidth: '100%',

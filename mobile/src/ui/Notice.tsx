@@ -59,6 +59,6 @@ const styles = StyleSheet.create({
   box: { borderRadius: radius.field, padding: space.lg, gap: space.xs },
   row: { flexDirection: 'row', gap: space.md },
   icon: { paddingTop: 1 },
-  body: { flex: 1, gap: 2 },
+  body: { flex: 1, gap: space.xs },
   action: { alignSelf: 'flex-start', marginLeft: 28 },
 });

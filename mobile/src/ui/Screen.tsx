@@ -74,7 +74,7 @@ export function ActionBar({ children, style }: { children: ReactNode; style?: St
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: { paddingHorizontal: layout.screenX - 8, paddingBottom: space.sm, gap: space.xs },
+  header: { paddingHorizontal: layout.headerX, paddingBottom: space.sm, gap: space.xs },
   headerLarge: { paddingHorizontal: layout.screenX, paddingTop: space.lg, paddingBottom: space.md },
   headerRow: { flexDirection: 'row', alignItems: 'center', minHeight: layout.minTouch },
   back: { marginRight: space.xs },

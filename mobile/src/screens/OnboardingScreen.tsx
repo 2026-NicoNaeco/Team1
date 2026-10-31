@@ -359,9 +359,9 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  top: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: layout.screenX - 8, minHeight: 56 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: layout.headerX, minHeight: 56 },
   topSpacer: { width: 48 },
-  progress: { flex: 1, flexDirection: 'row', gap: space.xs + 2 },
+  progress: { flex: 1, flexDirection: 'row', gap: space.xs },
   progressBar: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.surfaceStrong },
   progressBarOn: { backgroundColor: colors.primary },
   content: { paddingHorizontal: layout.screenX, paddingTop: space.md, paddingBottom: space.xl, gap: space.xl },
@@ -371,10 +371,10 @@ const styles = StyleSheet.create({
   cards: { gap: space.sm },
   tiles: { flexDirection: 'row', gap: space.sm },
   tileOuter: { flex: 1 },
-  tile: { alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 92, borderRadius: radius.card, borderWidth: 2 },
+  tile: { alignItems: 'center', justifyContent: 'center', gap: space.xs, minHeight: 92, borderRadius: radius.card, borderWidth: 2 },
   tileOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   tileOff: { backgroundColor: colors.surface, borderColor: colors.surface },
   unsureRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' },
   summary: { gap: space.lg },
-  summaryRow: { gap: 2 },
+  summaryRow: { gap: space.xs },
 });

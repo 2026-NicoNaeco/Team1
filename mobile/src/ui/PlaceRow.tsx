@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     gap: space.md,
     minHeight: 68,
     paddingVertical: space.md,
-    paddingHorizontal: layout.cardPad - 4,
+    paddingHorizontal: space.lg,
     borderRadius: radius.card,
   },
   card: { backgroundColor: colors.surface },
@@ -71,5 +71,5 @@ const styles = StyleSheet.create({
   disabled: { backgroundColor: colors.surfaceMuted },
   icon: { width: 44, height: 44, borderRadius: radius.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   iconDisabled: { backgroundColor: colors.surfaceStrong },
-  text: { flex: 1, gap: 2 },
+  text: { flex: 1, gap: space.xs },
 });

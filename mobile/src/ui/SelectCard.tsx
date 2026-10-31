@@ -1,5 +1,5 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radius, space } from '../design/tokens';
+import { colors, layout, radius, space } from '../design/tokens';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 import { Text } from './Text';
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     gap: space.md,
     minHeight: 68,
     paddingVertical: space.lg,
-    paddingHorizontal: space.lg + 4,
+    paddingHorizontal: layout.cardPad,
     borderRadius: radius.card,
     // 선택해도 크기가 흔들리지 않도록 테두리 두께를 항상 같게 둔다
     borderWidth: 2,
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   leadingSelected: { backgroundColor: colors.primary },
-  text: { flex: 1, gap: 2 },
+  text: { flex: 1, gap: space.xs },
   indicator: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   round: { borderRadius: radius.round },
   square: { borderRadius: 8 },

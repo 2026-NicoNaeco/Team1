@@ -28,7 +28,7 @@ export function BurdenMeter({ level, compact = false, mayBeHigher = false }: { l
   const tone = LEVEL_TONE[level];
   const text = burdenLabel(level, mayBeHigher);
   return (
-    <View accessible accessibilityLabel={`예상 운전 부담 ${text}`} style={[styles.pill, { backgroundColor: tone.bg }]}>
+    <View accessible accessibilityLabel={`예상 운전 부담 ${text}`} style={[styles.pill, compact && styles.pillCompact, { backgroundColor: tone.bg }]}>
       <View style={styles.bars}>
         {[1, 2, 3].map((n) => (
           <View key={n} style={[styles.bar, { backgroundColor: n <= count ? tone.fg : 'rgba(25, 31, 40, 0.14)' }]} />
@@ -54,9 +54,10 @@ const styles = StyleSheet.create({
     gap: space.sm,
     alignSelf: 'flex-start',
     paddingHorizontal: space.md,
-    paddingVertical: 6,
+    paddingVertical: space.xs,
     borderRadius: radius.round,
   },
+  pillCompact: { paddingHorizontal: space.sm },
   bars: { flexDirection: 'row', gap: 3 },
   bar: { width: 14, height: 7, borderRadius: 3.5 },
 });
