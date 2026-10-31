@@ -7,7 +7,7 @@ import type { RecommendationNotice, RouteCandidate } from '../domain/types';
 import { colors, layout, radius, shadow, space } from '../design/tokens';
 import { MapView, type CameraRequest, type MapMarker, type MapRoute } from '../map';
 import type { RootScreenProps } from '../navigation/types';
-import { useFontScale } from '../hooks/useFontScale';
+import { useTooNarrowFor } from '../hooks/useFontScale';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTripStore } from '../state/tripStore';
 import { useUiStore } from '../state/uiStore';
@@ -60,8 +60,8 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
   const selectRoute = useTripStore((s) => s.selectRoute);
   const clearRecomputeNotice = useTripStore((s) => s.clearRecomputeNotice);
   const showToast = useUiStore((s) => s.showToast);
-  // 큰 글자에서는 두 버튼을 세로로 쌓아 글자가 쪼개지지 않게 한다
-  const stacked = useFontScale() > 1.3;
+  // 폭이 모자라면 두 버튼을 세로로 쌓아 문구가 두 줄이 되지 않게 한다
+  const stacked = useTooNarrowFor(340);
 
   const [areaHeight, setAreaHeight] = useState(0);
   const [overlayHeight, setOverlayHeight] = useState(0);
@@ -106,7 +106,7 @@ export function RouteCompareScreen({ navigation }: RootScreenProps<'RouteCompare
   const peek = 24 + titleRowHeight + (ready && selected ? PEEK_SUMMARY_HEIGHT + space.xs : 0) + space.sm;
   const full = Math.max(peek + 160, areaHeight - overlayHeight - space.sm);
   // 화면이 낮을수록 지도가 너무 좁아지지 않도록 비교 단계의 시트 높이를 줄인다
-  const halfRatio = areaHeight < 620 ? 0.46 : areaHeight < 720 ? 0.52 : 0.58;
+  const halfRatio = areaHeight < 720 ? 0.46 : 0.52;
   const half = clamp(Math.round(areaHeight * halfRatio), peek + 140, Math.max(peek + 140, full - 80));
   const snapHeights = [peek, half, full];
   const visibleSheet = snapHeights[sheetIndex] ?? peek;

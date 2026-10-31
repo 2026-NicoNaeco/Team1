@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     gap: space.xs + 2,
     paddingHorizontal: space.md,
     paddingVertical: space.xs + 3,
-    borderRadius: radius.round,
+    borderRadius: radius.field,
     borderWidth: 1,
     alignSelf: 'flex-start',
     maxWidth: '100%',

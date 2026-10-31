@@ -66,27 +66,23 @@ export function RouteSummaryList({ items, selectedId, onPress }: RouteSummaryLis
             contentStyle={({ pressed }) => [styles.row, selected ? styles.rowOn : pressed ? styles.rowPressed : styles.rowOff]}
           >
             <LetterBadge letter={it.label} selected={selected} size={28} />
-            <View style={styles.time}>
-              <Text variant="bodyStrong">{formatMinutes(it.durationMinutes)}</Text>
-              <Text variant="caption" color={it.extraMinutes > 0 ? colors.textSecondary : colors.primaryStrong}>
-                {extra}
-              </Text>
-            </View>
-            {/* 배지들은 각자 alignSelf 가 위쪽이라, 한 번 감싸서 줄 가운데에 맞춘다 */}
-            <View style={styles.badges}>
-              {it.isRecommended ? (
-                <View>
-                  <RecommendBadge />
+            {/* 시간은 줄어들지 않는다. 폭이 모자라면 시간이 쪼개지는 대신 부담 표시가 다음 줄로 내려간다 */}
+            <View style={styles.main}>
+              <View style={styles.time}>
+                <Text variant="bodyStrong">{formatMinutes(it.durationMinutes)}</Text>
+                <Text variant="caption" color={it.extraMinutes > 0 ? colors.textSecondary : colors.primaryStrong}>
+                  {extra}
+                </Text>
+              </View>
+              {it.isRecommended || !it.withinTimeLimit ? (
+                <View style={styles.badges}>
+                  {it.isRecommended ? <RecommendBadge /> : null}
+                  {it.withinTimeLimit ? null : <StatusPill label="허용 시간 초과" tone="caution" />}
                 </View>
               ) : null}
-              {it.withinTimeLimit ? null : (
-                <View>
-                  <StatusPill label="허용 시간 초과" tone="caution" />
-                </View>
-              )}
-              <View>
-                <BurdenMeter level={it.burdenLevel} mayBeHigher={it.burdenMayBeHigher} compact />
-              </View>
+            </View>
+            <View>
+              <BurdenMeter level={it.burdenLevel} mayBeHigher={it.burdenMayBeHigher} compact />
             </View>
           </PressableScale>
         );
@@ -102,7 +98,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: space.md,
+    columnGap: space.sm,
+    rowGap: space.xs,
     minHeight: 56,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
@@ -112,6 +109,7 @@ const styles = StyleSheet.create({
   rowOff: { backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceMuted },
   rowPressed: { backgroundColor: colors.surfaceStrong, borderColor: colors.surfaceStrong },
   rowOn: { backgroundColor: colors.primarySofter, borderColor: colors.primary },
-  time: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: space.sm, flexGrow: 1, flexShrink: 1 },
-  badges: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.xs + 2 },
+  main: { flexGrow: 1, flexShrink: 0, gap: space.xs },
+  time: { flexDirection: 'row', alignItems: 'baseline', columnGap: space.sm },
+  badges: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
 });

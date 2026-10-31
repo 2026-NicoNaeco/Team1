@@ -32,7 +32,7 @@ var routeLayers = {};
 var markerLayers = {};
 var lastBoundsSig = null;
 var lastScene = null;
-var FIT_PADDING = 40;
+var FIT_PADDING = 28;
 var CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="' + THEME.onPrimary + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
 
 function post(msg) {
