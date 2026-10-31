@@ -14,7 +14,7 @@ import { RoutePreviewMap } from './RoutePreviewMap';
  * 카카오 지도(JavaScript SDK)를 WebView 에 띄운 실제 지도. 백엔드 모드에서 키가 있을 때 쓴다 (map/index.ts).
  * 장면 계산은 kakaoScene.ts, 그리기는 kakaoMapHtml.ts 의 페이지가 맡는다.
  * SDK 를 못 불러오면(키·도메인 등록 문제, 오프라인) 경로 모양만 그리는 임시 지도로 바꾼다.
- * 경로는 백엔드 도로망(OpenStreetMap 강남 일대)에서 나오므로 시연용이라는 표시와 OSM 출처를 항상 보여 준다.
+ * 경로는 백엔드 도로망(OpenStreetMap 서울 전체)에서 나오므로 시연용이라는 표시와 OSM 출처를 항상 보여 준다.
  */
 
 const READY_TIMEOUT_MS = 10_000;
