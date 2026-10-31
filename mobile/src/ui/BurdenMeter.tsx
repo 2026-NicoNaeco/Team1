@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     gap: space.sm,
     alignSelf: 'flex-start',
     paddingHorizontal: space.md,
-    paddingVertical: 6,
+    paddingVertical: space.xs,
     borderRadius: radius.round,
   },
   pillCompact: { paddingHorizontal: space.sm },

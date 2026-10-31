@@ -748,10 +748,10 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: space.xs,
     minHeight: 34,
     paddingHorizontal: space.md,
-    paddingVertical: 4,
+    paddingVertical: space.xs,
     borderRadius: radius.round,
     borderWidth: 1,
   },
@@ -760,8 +760,8 @@ const styles = StyleSheet.create({
   attribution: {
     position: 'absolute',
     right: space.md,
-    paddingHorizontal: space.sm + 2,
-    paddingVertical: 3,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
     borderRadius: radius.round,
     backgroundColor: 'rgba(255,255,255,0.82)',
     pointerEvents: 'none',

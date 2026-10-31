@@ -302,6 +302,6 @@ const styles = StyleSheet.create({
   sheetBody: { paddingHorizontal: layout.screenX },
   prefRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   prefIcon: { width: 40, height: 40, borderRadius: radius.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  prefText: { flex: 1, gap: 2 },
+  prefText: { flex: 1, gap: space.xs },
   listTitle: { marginTop: space.sm, marginBottom: space.xs },
 });

@@ -225,7 +225,7 @@ export function SearchScreen({ navigation, route }: RootScreenProps<'Search'>) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: layout.screenX - 8, paddingTop: space.sm, paddingBottom: space.sm },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: layout.headerX, paddingTop: space.sm, paddingBottom: space.sm },
   listContent: { paddingHorizontal: layout.screenX },
   list: { gap: space.sm },
   sectionTitle: { marginTop: space.lg, marginBottom: space.xs },

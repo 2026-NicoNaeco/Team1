@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
     minHeight: 56,
-    paddingHorizontal: space.xl - 2,
+    paddingHorizontal: space.xl,
     paddingVertical: space.sm,
     borderRadius: radius.round,
     backgroundColor: colors.surface,

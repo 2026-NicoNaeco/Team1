@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   icon: { width: 40, height: 40, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
   iconNormal: { backgroundColor: colors.primarySoft },
   iconDanger: { backgroundColor: colors.dangerBg },
-  text: { flex: 1, gap: 2 },
+  text: { flex: 1, gap: space.xs },
   value: { flexShrink: 1, maxWidth: '45%' },
   group: {
     backgroundColor: colors.surface,

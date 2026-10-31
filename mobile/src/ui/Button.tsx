@@ -45,8 +45,8 @@ const PALETTE: Record<ButtonVariant, { bg: string; pressed: string; fg: string }
 };
 
 const SIZE: Record<ButtonSize, { minHeight: number; radius: number; px: number; text: 'lead' | 'bodyStrong' | 'captionStrong'; icon: number }> = {
-  large: { minHeight: layout.buttonHeight, radius: radius.button, px: space.lg + 4, text: 'lead', icon: 22 },
-  medium: { minHeight: layout.minTouch, radius: 14, px: space.lg + 4, text: 'bodyStrong', icon: 20 },
+  large: { minHeight: layout.buttonHeight, radius: radius.button, px: layout.buttonX, text: 'lead', icon: 22 },
+  medium: { minHeight: layout.minTouch, radius: radius.control, px: layout.buttonX, text: 'bodyStrong', icon: 20 },
   small: { minHeight: 40, radius: radius.control, px: space.lg, text: 'captionStrong', icon: 18 },
 };
 

@@ -92,7 +92,7 @@ export function RouteSummaryList({ items, selectedId, onPress }: RouteSummaryLis
 }
 
 const styles = StyleSheet.create({
-  list: { gap: space.xs + 2 },
+  list: { gap: space.sm },
   // 선택해도 크기가 흔들리지 않도록 테두리 두께를 항상 같게 둔다 (경로 카드와 같은 규칙)
   row: {
     flexDirection: 'row',
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
-    borderRadius: radius.control + 2,
+    borderRadius: radius.control,
     borderWidth: 2,
   },
   rowOff: { backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceMuted },

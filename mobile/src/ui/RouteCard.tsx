@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { formatDistance, formatExtra, formatMinutes, formatWon } from '../domain/format';
 import type { RankedRoute, RouteCandidate, TradeoffItem, TradeoffKind } from '../domain/types';
-import { colors, radius, space } from '../design/tokens';
+import { colors, layout, radius, space } from '../design/tokens';
 import { LetterBadge, RecommendBadge, SelectedMark, StatusPill } from './Badges';
 import { BurdenMeter, burdenLabel } from './BurdenMeter';
 import { Icon, type IconName } from './Icon';
@@ -144,19 +144,19 @@ export function RouteCard({ route, ranked, selected, onPress, onlyCandidate = fa
 
 const styles = StyleSheet.create({
   // 선택해도 크기가 흔들리지 않도록 테두리 두께를 항상 같게 둔다
-  card: { borderRadius: radius.card, borderWidth: 2, padding: space.xl - 4, gap: space.md },
+  card: { borderRadius: radius.card, borderWidth: 2, padding: layout.cardPad, gap: space.md },
   idle: { backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceMuted },
   pressed: { backgroundColor: colors.surfaceStrong, borderColor: colors.surfaceStrong },
   selected: { backgroundColor: colors.primarySofter, borderColor: colors.primary },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  titleText: { flex: 1, gap: space.xs + 2 },
+  titleText: { flex: 1, gap: space.xs },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   timeRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: space.md },
   extra: { flexShrink: 1 },
   burden: { gap: space.sm },
-  reasons: { gap: space.xs + 2 },
+  reasons: { gap: space.sm },
   reasonRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  reasonIcon: { paddingTop: 4, width: 16, alignItems: 'center' },
+  reasonIcon: { paddingTop: space.xs, width: 16, alignItems: 'center' },
   factDot: { width: 6, height: 6, borderRadius: 3, marginTop: 5, backgroundColor: colors.textTertiary },
   reasonText: { flex: 1 },
   tradeoff: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', padding: space.md, borderRadius: radius.control },

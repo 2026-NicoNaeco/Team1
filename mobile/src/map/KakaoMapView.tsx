@@ -95,8 +95,8 @@ const styles = StyleSheet.create({
   attribution: {
     position: 'absolute',
     right: space.md,
-    paddingHorizontal: space.sm + 2,
-    paddingVertical: 3,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
     borderRadius: radius.round,
     backgroundColor: 'rgba(255,255,255,0.82)',
     pointerEvents: 'none',

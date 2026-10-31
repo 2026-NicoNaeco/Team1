@@ -64,10 +64,10 @@ const styles = StyleSheet.create({
   recommend: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: space.xs,
     alignSelf: 'flex-start',
-    paddingHorizontal: space.sm + 2,
-    paddingVertical: 4,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
     borderRadius: radius.round,
     backgroundColor: colors.primarySoft,
   },
@@ -81,8 +81,8 @@ const styles = StyleSheet.create({
   },
   pill: {
     alignSelf: 'flex-start',
-    paddingHorizontal: space.sm + 2,
-    paddingVertical: 4,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
     borderRadius: radius.round,
   },
 });

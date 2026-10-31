@@ -59,6 +59,6 @@ const styles = StyleSheet.create({
     paddingTop: space.sm,
     minHeight: layout.tabBarHeight,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: layout.minTouch },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs, minHeight: layout.minTouch },
   labelOn: { fontWeight: '700' },
 });
