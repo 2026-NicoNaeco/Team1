@@ -1,0 +1,39 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://easyroute:easyroute@db:5432/easyroute
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      GRAPH_PATH: ${GRAPH_PATH:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: easyroute
+      POSTGRES_PASSWORD: easyroute
+      POSTGRES_DB: easyroute
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easyroute"]
+      interval: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
