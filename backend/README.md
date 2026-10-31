@@ -174,6 +174,8 @@ app/
   api/        FastAPI 라우터·스키마·에러 처리
 db/init.sql   PostGIS hotspots 테이블
 data/gangnam.json  강남역·역삼역 일대 실제 도로망 (OSM 변환 결과)
+data/seoul.json    서울특별시 전체 도로망 (66MB 라 커밋하지 않음, 아래 절차로 만든다)
+scripts/          서울 도로망 조각 받기·합치기
 ```
 
 ## 알고리즘 구현체 교체
@@ -197,7 +199,8 @@ data/gangnam.json  강남역·역삼역 일대 실제 도로망 (OSM 변환 결�
 
 `GET /v1/service-area` 는 도로망이 덮는 영역을 준다. FE 는 기본 출발지와 지도 첫 화면을 이 안에서 잡아야 한다.
 `center` 는 영역 중앙에서 가장 가까운 도로 위 지점이라 그대로 출발지로 쓸 수 있다.
-`GRAPH_PATH=data/gangnam.json`(`.env.example` 기본값)이면 강남역·역삼역 일대, 비우면 광주 상무지구 ~ 동구 일대의 가상 격자다.
+`GRAPH_PATH=data/gangnam.json`(`.env.example` 기본값)이면 강남역·역삼역 일대, `data/seoul.json` 이면 서울 전체,
+비우면 광주 상무지구 ~ 동구 일대의 가상 격자다.
 
 ## 실제 도로망 (OpenStreetMap)
 
@@ -238,3 +241,24 @@ python -m app.routing.osm gangnam.osm data/gangnam.json --name "OpenStreetMap (�
 - **유턴 허용 지점 정보는 OSM 에 없다.** 금지 규칙이 없는 곳의 유턴은 가능하다고 보고(점수·시간으로만 억제),
   양방향 도로에서는 아무 교차로에서나 되돌아갈 수 있다. 실제로 유턴이 허용된 곳인지는 보장하지 않는다.
 - 출처 표시: OSM 자료는 ODbL 이라 지도·경로를 보여 주는 화면에 "© OpenStreetMap contributors" 를 표시해야 한다.
+
+### 서울 전체 (`data/seoul.json`)
+
+서울특별시 경계 안의 차도 전체다(노드 107,187개, 방향 구간 278,093개, 회전 금지 2,887개, 2026-10-30 기준).
+66MB 라 저장소에 넣지 않고(`.gitignore`) 각자 만든다. 서울 전체를 한 번에 요청하면 공용 Overpass 서버가
+"too busy" 로 거절하므로 3×3 조각으로 나눠 받는다. 조각은 서울시 경계(`ISO3166-2=KR-11`) 안의 도로만 담아
+경기도 땅만 있는 조각(북서쪽 7번)은 비어 있는 것이 정상이다.
+
+```powershell
+mkdir $env:TEMP\seoul-osm; cd $env:TEMP\seoul-osm
+# 1) 조각 받기. 서버가 바쁘면 실패한 조각부터 다시 실행하면 이어서 받는다 (조각마다 몇 분)
+powershell -ExecutionPolicy Bypass -File <저장소>\backend\scripts\download_seoul_tiles.ps1
+# 2) 합치기 (경계에 걸친 도로·노드는 한 번만 남긴다)
+python <저장소>\backend\scripts\merge_osm_tiles.py seoul.osm (Get-ChildItem tile_*.osm)
+# 3) 변환 (backend 폴더에서)
+python -m app.routing.osm $env:TEMP\seoul-osm\seoul.osm data/seoul.json --name "OpenStreetMap (서울특별시)"
+```
+
+`.env` 에 `GRAPH_PATH=data/seoul.json` 을 넣고 띄운다. 그래프를 읽는 데 약 6초, 랜드마크 준비에 약 2초가 걸린다.
+강남역 → 서울 곳곳(후보 3개) 응답은 대부분 1초 안팎, 도봉산역처럼 20km 넘게 먼 곳이 3~5초다(개발 PC 기준).
+도로망 밖(경기도 등) 좌표는 1km 안에 도로가 없으면 `OUT_OF_SERVICE_AREA` 로 거절한다.

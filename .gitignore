@@ -7,3 +7,5 @@ __pycache__/
 .claude/settings.local.json
 .vscode/
 .idea/
+# 서울 전체 도로망은 66MB 라 각자 만든다 (backend/README.md)
+backend/data/seoul.json
