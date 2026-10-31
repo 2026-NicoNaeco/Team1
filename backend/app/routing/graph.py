@@ -44,6 +44,7 @@ import math
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -113,17 +114,18 @@ class Edge:
     # 이 구간 끝 교차로에서 좌회전하면 비보호인지. None 이면 정보 없음
     unprotected_left: bool | None = None
 
-    @property
+    # 아래 값은 탐색 중 전환마다 쓰이므로 구간마다 한 번만 계산해 둔다 (형상·속도는 바뀌지 않는다)
+    @cached_property
     def travel_time_s(self) -> float:
         """이 구간을 지나는 시간. 확인된 신호의 대기 시간을 포함하고 회전 시간은 cost.transition 이 더한다."""
         running = self.length_m / (self.speed_kph * RUNNING_SPEED_RATIO / 3.6)
         return running + self.factor_amounts.get(FactorCode.TRAFFIC_LIGHT, 0) * SIGNAL_DELAY_S
 
-    @property
+    @cached_property
     def start_bearing(self) -> float:
         return bearing_deg(self.geometry[0], self.geometry[1])
 
-    @property
+    @cached_property
     def end_bearing(self) -> float:
         return bearing_deg(self.geometry[-2], self.geometry[-1])
 

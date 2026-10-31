@@ -160,7 +160,8 @@ app/
   domain/     난이도 요소 코드, Profile·Route 모델 (알고리즘 파트와 공유)
   routing/    알고리즘 모듈
     interface.py    RouteFinder — BE 가 의존하는 유일한 인터페이스
-    dijkstra.py     임시 구현: 엣지 기반 가중치 다익스트라 + 대안 경로
+    dijkstra.py     임시 구현: 엣지 기반 가중치 다익스트라(A* 로 가속) + 대안 경로
+    landmarks.py    A* 하한: 랜드마크까지의 주행 시간으로 남은 비용 하한 (ALT)
     cost.py         비용 모델 (주행 시간 + 난이도 점수 × 15초), 구간 전환 요소 판정
     measure.py      엣지 경로 → 요소별 측정값 (known / partial / unknown)
     steps.py        엣지 경로 → 턴바이턴 안내 단계 (직진 구간 병합)

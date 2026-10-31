@@ -1,3 +1,4 @@
+import heapq
 import math
 import random
 import time
@@ -21,6 +22,7 @@ from app.routing.dijkstra import DUPLICATE_SIMILARITY, DijkstraRouteFinder, path
 from app.routing.errors import OutOfServiceArea, SameLocation
 from app.routing.geo import haversine_m, signed_turn_deg
 from app.routing.graph import Node, RoadGraph, _NodeGrid
+from app.routing.landmarks import Landmarks
 from app.routing.sample_graph import build_sample_graph
 
 A = Point(35.0, 127.0)
@@ -591,3 +593,48 @@ def test_path_similarity():
     assert path_similarity([e0, e1, e2], [e0, e1, e2]) == pytest.approx(1.0)
     assert path_similarity([e0, e1, e2], [e0]) == pytest.approx(1.0)  # 짧은 쪽 기준
     assert path_similarity([e0], [e2]) == 0
+
+
+def test_landmark_bound_never_exceeds_travel_time():
+    """A* 가 다익스트라와 같은 경로를 찾으려면 하한이 실제 최소 주행 시간을 넘으면 안 된다."""
+    graph = build_sample_graph()
+    landmarks = Landmarks(graph)
+    rng = random.Random(5)
+    for target in rng.sample(list(graph.nodes), 5):
+        # target 까지의 실제 최소 주행 시간 (역방향 다익스트라)
+        best = {target: 0.0}
+        heap = [(0.0, target)]
+        while heap:
+            d, v = heapq.heappop(heap)
+            if d > best[v]:
+                continue
+            for edge in graph.edges.values():
+                if edge.target == v and d + edge.travel_time_s < best.get(edge.source, math.inf):
+                    best[edge.source] = d + edge.travel_time_s
+                    heapq.heappush(heap, (best[edge.source], edge.source))
+        bound = landmarks.bound([target])
+        assert bound(target) == 0
+        for node_id in graph.nodes:
+            assert bound(node_id) <= best.get(node_id, math.inf) + 1e-6
+
+
+def test_search_with_landmarks_matches_plain_dijkstra():
+    graph = build_sample_graph()
+    astar = DijkstraRouteFinder(graph)
+    plain = DijkstraRouteFinder(graph)
+    plain._landmarks.bound = lambda *a, **k: (lambda _: 0.0)
+    rng = random.Random(9)
+    nodes = list(graph.nodes.values())
+    profiles = [Profile(), Profile.fastest(), Profile(road_preference=RoadPreference.HIGHWAY)]
+    for i in range(30):
+        a, b = rng.sample(nodes, 2)
+        # 도로 중간에 붙는 경우(조각 엣지)도 섞는다
+        jitter = 2e-4 if i % 2 else 0.0
+        origin = Point(a.point.lat + rng.uniform(-jitter, jitter), a.point.lng + rng.uniform(-jitter, jitter))
+        destination = Point(b.point.lat + rng.uniform(-jitter, jitter), b.point.lng + rng.uniform(-jitter, jitter))
+        try:
+            expected = plain.find_route(origin, destination, profiles[i % 3], max_routes=3)
+        except (OutOfServiceArea, SameLocation):
+            continue
+        found = astar.find_route(origin, destination, profiles[i % 3], max_routes=3)
+        assert [r.cost for r in found] == pytest.approx([r.cost for r in expected])
